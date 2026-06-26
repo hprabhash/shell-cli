@@ -1,0 +1,5 @@
+# Registry content is checksummed (sha256, recorded in manifest.json) at
+# publish time. git's CRLF normalization (core.autocrlf) would silently
+# change file bytes on commit/checkout and invalidate every checksum —
+# treat it as opaque content git must never touch.
+registry/** -text
