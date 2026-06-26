@@ -28,11 +28,11 @@ function fakeRunner(
 
 describe("checkNodeVersion", () => {
   it("passes for a supported version", () => {
-    expect(checkNodeVersion("v20.11.0").status).toBe("pass");
+    expect(checkNodeVersion("v22.12.0").status).toBe("pass");
   });
 
   it("fails for an unsupported version", () => {
-    expect(checkNodeVersion("v18.19.0").status).toBe("fail");
+    expect(checkNodeVersion("v20.11.0").status).toBe("fail");
   });
 });
 

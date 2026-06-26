@@ -900,3 +900,23 @@ checked against GitHub's actual Actions API
 (`api.github.com/repos/hprabhash/shell-cli/actions/runs`) to confirm `ci.yml`
 genuinely ran and passed on GitHub's own runners — not just "the YAML
 looks right."
+
+### A real bug that verification caught: the stated Node minimum was wrong
+
+The first real push: both workflows failed at `pnpm install --frozen-lockfile`,
+on GitHub's runner (pinned to Node 20) but not locally (Node 25 — every
+constraint is satisfied by something that new). `engine-strict=true` (set
+in `.npmrc` since Phase 1) makes a mismatched `engines.node` on _any_
+installed package — direct or transitive — a hard install failure, not a
+warning. Checking each dependency's own `engines` field directly against
+the npm registry found the real floor: `commander@15` (a genuine runtime
+dependency of the CLI, not a dev tool) requires Node `>=22.12.0`;
+`lint-staged@17` (dev-only) requires `>=22.22.1`. `MIN_NODE_MAJOR_VERSION`
+had been `20` since Phase 1 and was never actually correct once `commander`
+reached v15 — nothing had exercised an install on exactly-Node-20 to
+surface it until CI did. Fixed: `MIN_NODE_MAJOR_VERSION` → `22` (shared,
+drives `shell doctor`'s own check), `cli-core`'s published `engines.node`
+→ `>=22.12.0` (what an end user actually needs to run the CLI), the root
+workspace's → `>=22.22.1` (what contributing to this repo needs), both
+workflows' `node-version` → `22`. Re-verified the same way: pushed again,
+polled the Actions API, confirmed `ci.yml` actually went green this time.

@@ -5,7 +5,8 @@ export const CONFIG_DIR_NAME = ".shell-cli";
 export const CONFIG_FILE_NAME = "config.json";
 export const CACHE_DIR_NAME = "cache";
 
-export const MIN_NODE_MAJOR_VERSION = 20;
+/** `commander@15` (a runtime dependency, not just a dev tool) requires Node >=22.12.0 — this floor is real, not arbitrary. */
+export const MIN_NODE_MAJOR_VERSION = 22;
 
 export const NPM_REGISTRY_BASE_URL = "https://registry.npmjs.org";
 

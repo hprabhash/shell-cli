@@ -33,7 +33,9 @@ registry/                                              — remote template regis
 
 ## Development
 
-Requires Node >=20 and pnpm.
+Requires Node >=22.22.1 and pnpm (the project's own minimum to run the CLI is
+lower, >=22.12.0 — `commander@15` requires it — but development tooling
+`lint-staged` needs the higher floor).
 
 ```bash
 pnpm install
