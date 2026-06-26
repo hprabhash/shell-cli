@@ -2,6 +2,7 @@ import type { Command } from "commander";
 
 import { colors } from "../core/colors";
 import { logger } from "../core/logger";
+import { collectPluginDoctorResults } from "../core/plugin-registry";
 import { runAllChecks, type CheckResult } from "../core/system-checks";
 
 function statusIcon(status: CheckResult["status"]): string {
@@ -18,7 +19,11 @@ export function registerDoctorCommand(program: Command): void {
     )
     .action(async () => {
       logger.info(colors.bold("Running environment checks..."));
-      const results = await runAllChecks();
+      const [systemResults, pluginResults] = await Promise.all([
+        runAllChecks(),
+        collectPluginDoctorResults(),
+      ]);
+      const results = [...systemResults, ...pluginResults];
 
       for (const result of results) {
         logger.info(`${statusIcon(result.status)} ${result.label}: ${result.message}`);

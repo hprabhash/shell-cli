@@ -13,6 +13,5 @@ export const NPM_REGISTRY_BASE_URL = "https://registry.npmjs.org";
 export const DEFAULT_REGISTRY_URL = "https://registry.shell-cli.dev/templates.json";
 
 export const SUPPORTED_PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "bun"] as const;
-export const SUPPORTED_FRAMEWORKS = ["next"] as const;
 export const SUPPORTED_DATABASES = ["postgresql"] as const;
 export const SUPPORTED_ORMS = ["prisma", "drizzle"] as const;

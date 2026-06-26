@@ -52,6 +52,14 @@ export class NetworkError extends ShellCliError {
   }
 }
 
+/** Thrown when a plugin fails to load or returns a metadata shape that fails validation. */
+export class PluginError extends ShellCliError {
+  constructor(message: string, hint?: string, cause?: unknown) {
+    super(message, { code: "PLUGIN_ERROR", exitCode: 1, hint, cause });
+    this.name = "PluginError";
+  }
+}
+
 /** Thrown when a user cancels an interactive prompt (e.g. Ctrl+C). Exit code 130 matches the SIGINT convention. */
 export class UserCancelledError extends ShellCliError {
   constructor(message = "Cancelled.") {

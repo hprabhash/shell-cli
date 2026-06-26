@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import {
-  SUPPORTED_FRAMEWORKS,
   SUPPORTED_PACKAGE_MANAGERS,
   UserCancelledError,
   ValidationError,
@@ -15,7 +14,8 @@ import { colors } from "../core/colors";
 import { loadConfig } from "../core/config-store";
 import { logger } from "../core/logger";
 import { detectAllPackageManagers, pickPreferredPackageManager } from "../core/package-manager";
-import { intro, note, outro, promptConfirm, promptSelect, promptText } from "../core/prompts";
+import { findPluginById, getPluginMetadata, getPluginsByCategory } from "../core/plugin-registry";
+import { intro, outro, promptConfirm, promptSelect, promptText } from "../core/prompts";
 import {
   assertValidProjectName,
   describeTargetDirectory,
@@ -30,23 +30,16 @@ interface CreateCommandOptions {
   install: boolean;
 }
 
-const FRAMEWORK_CHOICES: readonly { value: string; label: string; comingSoon?: boolean }[] = [
-  { value: "next", label: "Next.js 16 (App Router)" },
-  { value: "react", label: "React", comingSoon: true },
-  { value: "vue", label: "Vue", comingSoon: true },
-  { value: "nuxt", label: "Nuxt", comingSoon: true },
-  { value: "sveltekit", label: "SvelteKit", comingSoon: true },
-  { value: "angular", label: "Angular", comingSoon: true },
-];
-
-function assertSupportedFramework(id: string): FrameworkId {
-  if (!(SUPPORTED_FRAMEWORKS as readonly string[]).includes(id)) {
+function assertRegisteredFramework(id: string): FrameworkId {
+  const plugin = findPluginById(id, getPluginsByCategory("framework"));
+  if (!plugin) {
+    const available = getPluginsByCategory("framework").map((p) => getPluginMetadata(p).id);
     throw new ValidationError(
-      `Framework "${id}" isn't supported yet.`,
-      `Supported today: ${SUPPORTED_FRAMEWORKS.join(", ")}. See docs/architecture.md for the roadmap.`,
+      `Framework "${id}" isn't registered.`,
+      `Available: ${available.join(", ") || "none"}. See docs/architecture.md for the roadmap.`,
     );
   }
-  return id as FrameworkId;
+  return id;
 }
 
 function assertSupportedPackageManager(id: string): PackageManager {
@@ -103,23 +96,29 @@ async function confirmTargetDirectory(targetDir: string, yes: boolean): Promise<
 async function resolveFramework(command: Command, yes: boolean): Promise<FrameworkId> {
   const opts = command.opts<CreateCommandOptions>();
   if (opts.framework !== undefined) {
-    return assertSupportedFramework(opts.framework);
-  }
-  if (yes) {
-    return "next";
+    return assertRegisteredFramework(opts.framework);
   }
 
-  const comingSoon = FRAMEWORK_CHOICES.filter((choice) => choice.comingSoon);
-  note(comingSoon.map((choice) => choice.label).join(", "), "Coming soon");
+  const frameworkPlugins = getPluginsByCategory("framework");
+  const choices = frameworkPlugins.map((plugin) => getPluginMetadata(plugin));
+  const [firstChoice] = choices;
+  if (firstChoice === undefined) {
+    throw new ValidationError("No framework plugins are registered.");
+  }
+
+  if (yes) {
+    return firstChoice.id;
+  }
 
   const selected = await promptSelect({
     message: "Framework:",
-    options: FRAMEWORK_CHOICES.filter((choice) => !choice.comingSoon).map((choice) => ({
-      value: choice.value,
-      label: choice.label,
+    options: choices.map((metadata) => ({
+      value: metadata.id,
+      label: metadata.name,
+      hint: metadata.description,
     })),
   });
-  return assertSupportedFramework(selected);
+  return assertRegisteredFramework(selected);
 }
 
 async function resolvePackageManager(command: Command, yes: boolean): Promise<PackageManager> {

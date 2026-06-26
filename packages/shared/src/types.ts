@@ -1,12 +1,8 @@
-import type {
-  SUPPORTED_DATABASES,
-  SUPPORTED_FRAMEWORKS,
-  SUPPORTED_ORMS,
-  SUPPORTED_PACKAGE_MANAGERS,
-} from "./constants";
+import type { SUPPORTED_DATABASES, SUPPORTED_ORMS, SUPPORTED_PACKAGE_MANAGERS } from "./constants";
 
 export type PackageManager = (typeof SUPPORTED_PACKAGE_MANAGERS)[number];
-export type FrameworkId = (typeof SUPPORTED_FRAMEWORKS)[number];
+/** Plugin-owned, not a closed enum — matches a registered plugin's `PluginMetadata.id`. */
+export type FrameworkId = string;
 export type DatabaseId = (typeof SUPPORTED_DATABASES)[number];
 export type OrmId = (typeof SUPPORTED_ORMS)[number];
 

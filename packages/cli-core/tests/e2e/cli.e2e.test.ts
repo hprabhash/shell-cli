@@ -99,10 +99,11 @@ describe("shell CLI (e2e)", () => {
     expect(update.stdout + update.stderr).toContain("Phase 7");
   });
 
-  it("plugins prints a forward-reference to Phase 2 and exits 0", async () => {
+  it("plugins lists the built-in next plugin", async () => {
     const result = await runCli(["plugins"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout + result.stderr).toContain("Phase 2");
+    expect(result.stdout).toContain("next");
+    expect(result.stdout).toContain("framework");
   });
 
   it("create resolves a plan non-interactively and writes no files", async () => {
@@ -120,6 +121,36 @@ describe("shell CLI (e2e)", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Resolved project plan");
     expect(fs.existsSync(targetDir)).toBe(false);
+  });
+
+  it("create accepts a framework that's actually registered", async () => {
+    const result = await runCli([
+      "create",
+      "my-next-app",
+      "--yes",
+      "--framework",
+      "next",
+      "--pm",
+      "npm",
+      "--no-git",
+      "--no-install",
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Framework:");
+  });
+
+  it("rejects a framework that isn't registered", async () => {
+    const result = await runCli([
+      "create",
+      "my-app",
+      "--yes",
+      "--framework",
+      "totally-fake",
+      "--pm",
+      "npm",
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("isn't registered");
   });
 
   it("rejects an invalid project name with a non-zero exit code", async () => {

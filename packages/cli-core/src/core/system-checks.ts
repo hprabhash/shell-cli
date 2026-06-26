@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   MIN_NODE_MAJOR_VERSION,
   NPM_REGISTRY_BASE_URL,
+  type CheckResult,
   type CommandRunner,
 } from "@shell-cli/shared";
 
@@ -11,14 +12,7 @@ import { realCommandRunner } from "./command-runner";
 import { detectAllPackageManagers } from "./package-manager";
 import { getConfigDir } from "./paths";
 
-export type CheckStatus = "pass" | "warn" | "fail";
-
-export interface CheckResult {
-  id: string;
-  label: string;
-  status: CheckStatus;
-  message: string;
-}
+export type { CheckResult, CheckStatus } from "@shell-cli/shared";
 
 export function checkNodeVersion(nodeVersion: string = process.version): CheckResult {
   const major = Number(nodeVersion.replace(/^v/, "").split(".")[0]);
