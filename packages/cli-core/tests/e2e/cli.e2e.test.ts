@@ -106,7 +106,7 @@ describe("shell CLI (e2e)", () => {
     expect(result.stdout).toContain("framework");
   });
 
-  it("create resolves a plan non-interactively and writes no files", async () => {
+  it("create resolves a plan non-interactively and scaffolds a real Next.js project", async () => {
     const targetDir = path.join(tmpHome, "my-app");
     const result = await runCli([
       "create",
@@ -120,10 +120,46 @@ describe("shell CLI (e2e)", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Resolved project plan");
-    expect(fs.existsSync(targetDir)).toBe(false);
+    expect(result.stdout).toContain("Created my-app");
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(targetDir, "package.json"), "utf-8"),
+    ) as { name: string };
+    expect(packageJson.name).toBe("my-app");
+    expect(fs.existsSync(path.join(targetDir, "app", "page.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, ".git"))).toBe(false);
+    expect(fs.existsSync(path.join(targetDir, "node_modules"))).toBe(false);
+  });
+
+  it("create initializes git by default and skips it with --no-git", async () => {
+    const withGitDir = path.join(tmpHome, "with-git-app");
+    const withGitResult = await runCli([
+      "create",
+      "with-git-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--no-install",
+    ]);
+    expect(withGitResult.exitCode).toBe(0);
+    expect(fs.existsSync(path.join(withGitDir, ".git"))).toBe(true);
+
+    const withoutGitDir = path.join(tmpHome, "without-git-app");
+    const withoutGitResult = await runCli([
+      "create",
+      "without-git-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--no-git",
+      "--no-install",
+    ]);
+    expect(withoutGitResult.exitCode).toBe(0);
+    expect(fs.existsSync(path.join(withoutGitDir, ".git"))).toBe(false);
   });
 
   it("create accepts a framework that's actually registered", async () => {
+    const targetDir = path.join(tmpHome, "my-next-app");
     const result = await runCli([
       "create",
       "my-next-app",
@@ -137,12 +173,13 @@ describe("shell CLI (e2e)", () => {
     ]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Framework:");
+    expect(fs.existsSync(path.join(targetDir, "package.json"))).toBe(true);
   });
 
   it("rejects a framework that isn't registered", async () => {
     const result = await runCli([
       "create",
-      "my-app",
+      "my-unregistered-framework-app",
       "--yes",
       "--framework",
       "totally-fake",

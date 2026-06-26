@@ -74,6 +74,9 @@ importers:
       "@shell-cli/shared":
         specifier: workspace:*
         version: link:../shared
+      "@shell-cli/template-engine":
+        specifier: workspace:*
+        version: link:../template-engine
 
   packages/shared:
     dependencies:

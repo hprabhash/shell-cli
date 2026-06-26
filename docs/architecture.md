@@ -10,7 +10,7 @@ exists, why it's structured that way, and what's intentionally deferred.
 | 1   | CLI Core (commands, prompts, logging, configuration) | ✅ Done    |
 | 2   | Plugin architecture                                  | ✅ Done    |
 | 3   | Template engine                                      | ✅ Done    |
-| 4   | Next.js plugin (real `shell create` generation)      | ⏳ Planned |
+| 4   | Next.js plugin (real `shell create` generation)      | ✅ Done    |
 | 5   | Better Auth plugin                                   | ⏳ Planned |
 | 6   | Prisma / Drizzle / PostgreSQL plugins                | ⏳ Planned |
 | 7   | Template registry (remote, versioned, cached)        | ⏳ Planned |
@@ -32,14 +32,14 @@ exists, why it's structured that way, and what's intentionally deferred.
   runtime services (logger, config store, prompts, package-manager detection, system
   checks).
 
-### Why no file generation yet
+### Why no file generation in Phase 1
 
-Building the plugin contract well (Phase 2, below) required at least one concrete
-consumer in mind (the Next.js + Better Auth + Prisma/Drizzle stack), so Phase 1
-intentionally kept `shell create` as a **prompt + validation + planning** flow only:
-it resolves and prints the user's choices but writes no files. Real generation still
-waits on the template engine (Phase 3) and the Next.js plugin's `generate()` (Phase 4) — Phase 2 only replaced _where the framework choice comes from_, not whether
-files get written.
+Building the plugin contract well (Phase 2) required at least one concrete
+consumer in mind, so Phase 1 intentionally kept `shell create` as a
+**prompt + validation + planning** flow only — it resolved and printed the user's
+choices but wrote no files. Real generation needed the template engine (Phase 3)
+and the Next.js plugin's `generate()` (Phase 4) before it could exist; as of Phase
+4, `shell create` is fully real (see below).
 
 ### Error handling
 
@@ -70,17 +70,17 @@ template registry; not a working endpoint today), `cacheDir`.
 
 ### Commands and what's real
 
-| Command                                | Phase 1 behavior                                                                                           |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `shell create [name]`                  | Full prompt flow + validation + non-interactive flags; prints a resolved plan; writes nothing to disk yet. |
-| `shell doctor`                         | Fully real: Node/git/package-manager detection, home-dir write check, best-effort registry reachability.   |
-| `shell version`                        | Fully real.                                                                                                |
-| `shell update`                         | Fully real check-and-advise (registry lookup + semver compare); does not self-execute a global install.    |
-| `shell plugins`                        | Real as of Phase 2 — see below.                                                                            |
-| `shell config get/set/list/path/reset` | Fully real, schema-validated.                                                                              |
-| `shell template list/update`           | Stub — honest "lands in Phase 7" message, exit 0.                                                          |
-| `shell cache clear`                    | Fully real — clears `~/.shell-cli/cache`.                                                                  |
-| `shell help`                           | Free via `commander`.                                                                                      |
+| Command                                | Phase 1 behavior                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `shell create [name]`                  | Real as of Phase 4 — see below.                                                                          |
+| `shell doctor`                         | Fully real: Node/git/package-manager detection, home-dir write check, best-effort registry reachability. |
+| `shell version`                        | Fully real.                                                                                              |
+| `shell update`                         | Fully real check-and-advise (registry lookup + semver compare); does not self-execute a global install.  |
+| `shell plugins`                        | Real as of Phase 2 — see below.                                                                          |
+| `shell config get/set/list/path/reset` | Fully real, schema-validated.                                                                            |
+| `shell template list/update`           | Stub — honest "lands in Phase 7" message, exit 0.                                                        |
+| `shell cache clear`                    | Fully real — clears `~/.shell-cli/cache`.                                                                |
+| `shell help`                           | Free via `commander`.                                                                                    |
 
 Stubs always exit `0` and name the phase that will implement them — they are
 forward-declarations of the command surface, not fake implementations.
@@ -199,4 +199,100 @@ Handlebars treats a partial reference that's alone on its own line as
 "standalone" and strips the line break that follows it in the _parent_ template —
 the partial's own content has to supply that newline itself, or output lines run
 together. Hit this writing the integration test fixture; not a bug, just a sharp
-edge worth remembering when writing real templates in Phase 4.
+edge worth remembering when writing real templates.
+
+## Phase 4 — Next.js Plugin (Real Generation)
+
+### Research before building
+
+Rather than guess Next.js 16 conventions from training data that could be stale,
+a real `npx create-next-app@latest` (TS + Tailwind + App Router, `--skip-install`)
+was generated into scratch space and inspected directly, and the npm registry was
+queried for actual current versions. Confirmed: `next@16.2.9`, `react`/
+`react-dom@19.2.7`, `tailwindcss`/`@tailwindcss/postcss@4.3.1`; Turbopack is the
+default bundler (no `--turbopack` flag needed in scripts); ESLint config uses the
+`eslint/config` `defineConfig`/`globalIgnores` helpers with
+`eslint-config-next/core-web-vitals` + `eslint-config-next/typescript`; Tailwind v4
+is CSS-first (`@import "tailwindcss"` + `@theme inline`, no `tailwind.config.js`).
+The reference scaffold exact-pins `next`/`react`/`react-dom`/`eslint-config-next`
+and ranges everything else (`eslint: "^9"`, `typescript: "^5"`, etc.) — mirrored
+rather than reaching for absolute-latest on every dependency, since a generated
+app's constraints are independent of this monorepo's own tooling versions.
+
+### `packages/plugin-next/templates/next-app/`
+
+Co-located with the plugin rather than a separate `packages/templates` package —
+there's exactly one consumer; a shared package would be speculative until a second
+plugin shows real duplication. Files needing a variable use the `.hbs` convention
+from Phase 3 (`package.json.hbs`, `app/layout.tsx.hbs`, `app/page.tsx.hbs`,
+`README.md.hbs`); everything else (`tsconfig.json`, `next.config.ts`,
+`eslint.config.mjs`, `postcss.config.mjs`, `.gitignore`, `app/globals.css`) is a
+plain static copy, since nothing in them needs templating yet — converting them to
+`.hbs` happens if/when a future phase genuinely needs to inject something.
+
+The homepage (`app/page.tsx.hbs`) is **not** a copy of create-next-app's demo —
+no Vercel marketing links or bundled SVG assets, just a small page proving
+Tailwind/dark-mode work, naming the project and the stack.
+
+### `generate()`, finally implemented
+
+`plugin-next`'s `generate()` validates its inputs via `requireStringVariable`
+(new in `shared/src/plugin.ts` — the boundary check between a plugin's generic
+`Record<string, unknown>` variables bag and what it specifically needs, throwing
+`PluginError` on a miss) and calls `renderTemplateTree` from
+`@shell-cli/template-engine`. `install`/`postInstall` stay unimplemented:
+installing dependencies is generic across every framework, so `cli-core` handles
+it once rather than each plugin reimplementing the same `<pm> install` call.
+
+### `cli-core`: `core/git.ts` and `core/install-dependencies.ts`
+
+Both **never throw** — a failed `git init`/commit or a failed dependency install
+shouldn't roll back an otherwise-successfully-generated project (that's what Phase
+3's `ProjectWriter` rollback is for, scoped to the generation step itself, not
+optional follow-up steps). Each returns a result object instead
+(`{initialized, committed}` / `{success, output}`) and `create.ts` decides how to
+warn. `initGitRepo` mirrors create-next-app's own behavior of committing after
+init, using whatever identity is already configured — if there isn't one, it
+degrades to "initialized but not committed" rather than failing the whole command.
+
+This needed `CommandRunner` (in `shared/src/types.ts`) to grow an optional
+`{cwd}` parameter — it previously had no way to run a command anywhere but the
+CLI's own working directory, fine for version checks but not for installing into
+a freshly-created project directory. `realCommandRunner` was updated to honor it;
+no existing caller needed to change.
+
+### `commands/create.ts`: the real pipeline
+
+Resolves the same `ProjectPlan` as before, then: `generate()` (spinner, falls
+back to a "doesn't implement generation yet" notice if a future plugin lacks
+one rather than crashing), git-init if requested (spinner, warns rather than
+fails on a missing identity), dependency install if requested (spinner, warns
+with the exact retry command on failure), then a real success message with the
+project path and the package-manager-specific dev command — replacing the
+Phase 1/2/3 "no files were written" placeholder entirely.
+
+### Verification
+
+Automated e2e tests use `--no-install` to stay fast and offline. The real,
+slow path — actual `npm install` + `next build` + `next lint` against a freshly
+generated project — was run manually once: scaffold succeeded, `npm run build`
+compiled successfully, typechecked, generated static pages, and `npm run lint`
+reported zero issues. Not part of the routine automated suite (too slow/network-
+dependent to run on every `pnpm test:e2e`), but proves the generated output is
+genuinely correct, not just file-existence-checked.
+
+### Gotcha worth documenting: ESLint's nested-config discovery vs. template content
+
+`templates/next-app/eslint.config.mjs` (template content, imports
+`eslint-config-next` — a package that only exists in _generated_ projects, never
+in this repo) is excluded from our own linting via `ignores` in the root
+`eslint.config.js`, and `eslint .` respects that correctly. But `eslint <some
+file path>` with an **explicit** path resolves that file's nearest config by
+walking up its directory tree _before_ checking whether it's ignored — and for
+`templates/next-app/next.config.ts`, the nearest config is the template's own
+`eslint.config.mjs`, which ESLint then tries to load as real config and crashes
+on the unresolvable import. `lint-staged` invokes ESLint with explicit staged
+file paths, so this only surfaced at commit time, not on a plain `pnpm lint`.
+Fixed by adding `--no-config-lookup --config eslint.config.js` (forces our one
+root config, skips the crash-prone per-file nested lookup) to every ESLint
+invocation (`lint`, `lint:fix`, and the `lint-staged` entry).

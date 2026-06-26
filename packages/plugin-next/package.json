@@ -17,6 +17,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@shell-cli/shared": "workspace:*"
+    "@shell-cli/shared": "workspace:*",
+    "@shell-cli/template-engine": "workspace:*"
   }
 }

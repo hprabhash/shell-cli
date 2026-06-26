@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PluginError } from "./errors";
 import type { PackageManager } from "./types";
 
 export type CheckStatus = "pass" | "warn" | "fail";
@@ -72,11 +73,13 @@ export interface PluginPostInstallContext {
 }
 
 /**
- * Every plugin (framework, auth, ORM, database, UI, ...) implements this. `install`,
- * `generate`, and `postInstall` are optional because no plugin can do real work
- * there yet — there's no template engine until Phase 3, no package-install pipeline
- * until Phase 4. The other four are required because "no extra questions" / "valid"
- * / "no checks" are genuinely correct answers today, not placeholders.
+ * Every plugin (framework, auth, ORM, database, UI, ...) implements this.
+ * `install`/`generate`/`postInstall` stay optional even though `plugin-next`
+ * implements `generate` for real as of Phase 4 — a plugin that genuinely has
+ * nothing to install or run post-generation (e.g. a database provider that's
+ * just a connection string) shouldn't have to fake an empty implementation.
+ * The other four are required because "no extra questions" / "valid" / "no
+ * checks" are genuinely correct answers even for a plugin with nothing else to do.
  */
 export interface Plugin {
   register: () => PluginMetadata;
@@ -86,4 +89,18 @@ export interface Plugin {
   install?: (context: PluginInstallContext) => Promise<void>;
   generate?: (context: PluginGenerateContext) => Promise<void>;
   postInstall?: (context: PluginPostInstallContext) => Promise<void>;
+}
+
+/**
+ * Reads a required string out of a plugin's generic `variables` bag, throwing a
+ * clear `PluginError` if it's missing or the wrong type — the boundary check
+ * between the generic `Record<string, unknown>` context and a specific plugin's
+ * actual needs.
+ */
+export function requireStringVariable(variables: Record<string, unknown>, key: string): string {
+  const value = variables[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new PluginError(`Expected a non-empty string variable "${key}".`);
+  }
+  return value;
 }

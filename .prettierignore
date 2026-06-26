@@ -1,0 +1,4 @@
+# Template content describes a *generated* project's source, in a templating
+# syntax (.hbs) Prettier doesn't understand — never format it as our own code.
+packages/*/templates/**
+pnpm-lock.yaml

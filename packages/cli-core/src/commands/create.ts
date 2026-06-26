@@ -12,6 +12,8 @@ import type { Command } from "commander";
 
 import { colors } from "../core/colors";
 import { loadConfig } from "../core/config-store";
+import { initGitRepo } from "../core/git";
+import { runInstall } from "../core/install-dependencies";
 import { logger } from "../core/logger";
 import { detectAllPackageManagers, pickPreferredPackageManager } from "../core/package-manager";
 import { findPluginById, getPluginMetadata, getPluginsByCategory } from "../core/plugin-registry";
@@ -181,6 +183,63 @@ function printPlanSummary(plan: ProjectPlan): void {
   logger.debug(JSON.stringify(plan, null, 2));
 }
 
+async function generateProject(plan: ProjectPlan): Promise<void> {
+  const plugin = findPluginById(plan.framework);
+  const generate = plugin?.generate;
+  if (!generate) {
+    logger.warn(
+      `The "${plan.framework}" plugin doesn't implement generation yet — no files were written.`,
+    );
+    return;
+  }
+  await logger.spinner("Scaffolding project...", () =>
+    generate({
+      projectDir: plan.targetDir,
+      variables: { projectName: plan.projectName, packageManager: plan.packageManager },
+    }),
+  );
+}
+
+async function runGitInitStep(targetDir: string): Promise<void> {
+  const result = await logger.spinner("Initializing git repository...", () =>
+    initGitRepo(targetDir),
+  );
+  if (!result.initialized) {
+    logger.warn("Could not initialize a git repository — is git installed?");
+  } else if (!result.committed) {
+    logger.warn(
+      "Initialized git but couldn't create the initial commit (often a missing git user.name/user.email). Commit manually when ready.",
+    );
+  }
+}
+
+async function runInstallStep(targetDir: string, packageManager: PackageManager): Promise<void> {
+  const result = await logger.spinner(`Installing dependencies with ${packageManager}...`, () =>
+    runInstall(targetDir, packageManager),
+  );
+  if (!result.success) {
+    logger.warn(
+      `Dependency installation failed. Run "${packageManager} install" manually to retry.`,
+    );
+    if (result.output.length > 0) {
+      logger.debug(result.output);
+    }
+  }
+}
+
+function printSuccessMessage(plan: ProjectPlan): void {
+  const runCommand = plan.packageManager === "npm" ? "npm run dev" : `${plan.packageManager} dev`;
+  logger.info("");
+  logger.success(`Created ${plan.projectName} at ${plan.targetDir}`);
+  logger.info("");
+  logger.info("Next steps:");
+  logger.info(`  cd ${plan.projectName}`);
+  if (!plan.installDependencies) {
+    logger.info(`  ${plan.packageManager} install`);
+  }
+  logger.info(`  ${runCommand}`);
+}
+
 export function registerCreateCommand(program: Command): void {
   const createCommand = program
     .command("create [name]")
@@ -216,6 +275,16 @@ export function registerCreateCommand(program: Command): void {
       };
 
       printPlanSummary(plan);
-      outro("No files were written — project generation lands in Phase 4 (Next.js plugin).");
+
+      await generateProject(plan);
+      if (plan.initGit) {
+        await runGitInitStep(plan.targetDir);
+      }
+      if (plan.installDependencies) {
+        await runInstallStep(plan.targetDir, plan.packageManager);
+      }
+
+      printSuccessMessage(plan);
+      outro("Done.");
     });
 }

@@ -12,6 +12,8 @@ export default tseslint.config(
       "eslint.config.js",
       "vitest.config.ts",
       "packages/*/tsup.config.ts",
+      // Template content describes a *generated* project's source — not ours to lint.
+      "packages/*/templates/**",
     ],
   },
   js.configs.recommended,

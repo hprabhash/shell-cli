@@ -21,9 +21,9 @@ describe("plugin-next", () => {
     await expect(nextPlugin.doctor()).resolves.toEqual([]);
   });
 
-  it("does not implement install/generate/postInstall yet", () => {
+  it("implements generate() but not install/postInstall yet (see generate.test.ts)", () => {
     expect("install" in nextPlugin).toBe(false);
-    expect("generate" in nextPlugin).toBe(false);
+    expect("generate" in nextPlugin).toBe(true);
     expect("postInstall" in nextPlugin).toBe(false);
   });
 });
