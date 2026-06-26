@@ -713,6 +713,26 @@ latest → list shows no pending update → no-op update → no-argument rollbac
 the template cache too).
 
 **Manual**: after pushing `registry/`'s real content, `shell template
-list`/`update`/`rollback` were run against the live
+list`/`update`/`rollback`/`doctor`/`cache clear` were run against the live
 `raw.githubusercontent.com` URL — the same "don't trust file-existence
-checks alone" discipline every prior phase used.
+checks alone" discipline every prior phase used. This is the one phase where
+that discipline caught something file-existence checks structurally
+_couldn't_: see below.
+
+### Real bug only manual verification caught: git silently rewrote the published bytes
+
+`shell template update next-app` against the live registry failed every
+file's checksum. The cause: this machine's git is configured with
+`core.autocrlf=true`, which normalizes CRLF→LF on commit. The publishing
+script computed every file's sha256 against the original CRLF bytes on
+disk; git then silently stored LF versions when the files were committed —
+so the manifest's checksums and the actual served content diverged the
+moment the commit happened, invisible until something actually re-verified
+the round trip end to end. Confirmed via the GitHub Contents API (reads the
+git blob directly, bypassing any CDN) that the _committed_ content was the
+mismatched LF version, then fixed with a new root `.gitattributes`
+(`registry/** -text`, telling git never to touch these bytes again) and
+`git add --renormalize registry/` to restore the original checksummed
+content. Re-verified against the live URL after the CDN's `max-age=300`
+cache expired (confirmed via `Cache-Control`/`Source-Age` response headers)
+— `update` then succeeded for real, downloading and verifying all ten files.
