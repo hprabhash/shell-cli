@@ -99,11 +99,13 @@ describe("shell CLI (e2e)", () => {
     expect(update.stdout + update.stderr).toContain("Phase 7");
   });
 
-  it("plugins lists the built-in next plugin", async () => {
+  it("plugins lists the built-in next and better-auth plugins", async () => {
     const result = await runCli(["plugins"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("next");
     expect(result.stdout).toContain("framework");
+    expect(result.stdout).toContain("better-auth");
+    expect(result.stdout).toContain("auth");
   });
 
   it("create resolves a plan non-interactively and scaffolds a real Next.js project", async () => {
@@ -194,5 +196,87 @@ describe("shell CLI (e2e)", () => {
     const result = await runCli(["create", "Invalid Name", "--yes", "--pm", "npm"]);
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain("not a valid project name");
+  });
+
+  it("create with --auth better-auth scaffolds real auth files alongside the Next.js app", async () => {
+    const targetDir = path.join(tmpHome, "auth-app");
+    const result = await runCli([
+      "create",
+      "auth-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--auth",
+      "better-auth",
+      "--auth-features",
+      "email-password,google",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Authentication:        better-auth");
+    expect(fs.existsSync(path.join(targetDir, "lib", "auth.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "lib", "auth-client.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "app", "api", "auth", "[...all]", "route.ts"))).toBe(
+      true,
+    );
+
+    const authSource = fs.readFileSync(path.join(targetDir, "lib", "auth.ts"), "utf-8");
+    expect(authSource).toContain("emailAndPassword");
+    expect(authSource).toContain("GOOGLE_CLIENT_ID");
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(targetDir, "package.json"), "utf-8"),
+    ) as { name: string; dependencies: Record<string, string> };
+    expect(packageJson.name).toBe("auth-app");
+    expect(packageJson.dependencies.next).toBeDefined();
+    expect(packageJson.dependencies["better-auth"]).toBeDefined();
+  });
+
+  it("create without --auth still works exactly as before (no auth files)", async () => {
+    const targetDir = path.join(tmpHome, "no-auth-app");
+    const result = await runCli([
+      "create",
+      "no-auth-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--no-git",
+      "--no-install",
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Authentication:        none");
+    expect(fs.existsSync(path.join(targetDir, "lib", "auth.ts"))).toBe(false);
+  });
+
+  it("rejects an invalid Better Auth feature combination (teams without organization)", async () => {
+    const result = await runCli([
+      "create",
+      "invalid-auth-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--auth",
+      "better-auth",
+      "--auth-features",
+      "teams",
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("requires");
+  });
+
+  it("rejects an auth plugin that isn't registered", async () => {
+    const result = await runCli([
+      "create",
+      "fake-auth-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--auth",
+      "totally-fake-auth",
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("isn't registered");
   });
 });

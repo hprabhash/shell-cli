@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
+    "@shell-cli/plugin-better-auth": "workspace:*",
     "@shell-cli/plugin-next": "workspace:*",
     "@shell-cli/shared": "workspace:*",
     "commander": "^15.0.0",

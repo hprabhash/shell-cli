@@ -10,10 +10,17 @@ import { FileSystemError } from "@shell-cli/shared";
  * already existed (e.g. the user ran `create` into an empty existing folder),
  * rollback removes only what this run added.
  */
+interface PatchedFile {
+  fullPath: string;
+  /** `null` means the file didn't exist before the patch — rollback deletes it like a fresh write. */
+  originalContent: string | null;
+}
+
 export class ProjectWriter {
   private readonly targetDir: string;
   private readonly targetDirPreexisted: boolean;
   private readonly writtenFiles: string[] = [];
+  private readonly patchedFiles: PatchedFile[] = [];
   private committed = false;
 
   constructor(targetDir: string) {
@@ -47,16 +54,47 @@ export class ProjectWriter {
     this.writtenFiles.push(fullPath);
   }
 
+  /**
+   * For files a *previous* plugin's writer may have already created (e.g. a
+   * shared `package.json`) — unlike `writeFile`, rollback restores the
+   * original content instead of deleting a file this run didn't create.
+   */
+  patchFile(relativePath: string, newContent: string): void {
+    const fullPath = path.join(this.targetDir, relativePath);
+    try {
+      const originalContent = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf-8") : null;
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, newContent, "utf-8");
+      this.patchedFiles.push({ fullPath, originalContent });
+    } catch (error) {
+      throw new FileSystemError(`Could not patch file at ${fullPath}.`, undefined, error);
+    }
+  }
+
   /** Marks the run as done — a later `rollback()` call becomes a no-op. */
   commit(): void {
     this.committed = true;
     this.writtenFiles.length = 0;
+    this.patchedFiles.length = 0;
   }
 
   rollback(): void {
     if (this.committed) {
       return;
     }
+
+    for (const patch of [...this.patchedFiles].reverse()) {
+      try {
+        if (patch.originalContent === null) {
+          fs.rmSync(patch.fullPath, { force: true });
+        } else {
+          fs.writeFileSync(patch.fullPath, patch.originalContent, "utf-8");
+        }
+      } catch {
+        // Best-effort cleanup — a failed restore here shouldn't mask the original error.
+      }
+    }
+    this.patchedFiles.length = 0;
 
     for (const filePath of [...this.writtenFiles].reverse()) {
       try {

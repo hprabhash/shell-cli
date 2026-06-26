@@ -69,4 +69,48 @@ describe("ProjectWriter", () => {
     writer.rollback();
     expect(fs.existsSync(path.join(targetDir, "a.txt"))).toBe(true);
   });
+
+  it("patchFile restores the original content on rollback when the file pre-existed", () => {
+    const targetDir = path.join(parentDir, "existing-target");
+    fs.mkdirSync(targetDir);
+    fs.writeFileSync(path.join(targetDir, "package.json"), '{"name":"original"}');
+
+    const writer = new ProjectWriter(targetDir);
+    writer.patchFile("package.json", '{"name":"patched"}');
+    expect(fs.readFileSync(path.join(targetDir, "package.json"), "utf-8")).toBe(
+      '{"name":"patched"}',
+    );
+
+    writer.rollback();
+    expect(fs.readFileSync(path.join(targetDir, "package.json"), "utf-8")).toBe(
+      '{"name":"original"}',
+    );
+  });
+
+  it("patchFile behaves like writeFile (delete on rollback) when the file didn't pre-exist", () => {
+    const targetDir = path.join(parentDir, "existing-target");
+    fs.mkdirSync(targetDir);
+
+    const writer = new ProjectWriter(targetDir);
+    writer.patchFile("new-file.json", '{"name":"new"}');
+    writer.rollback();
+
+    expect(fs.existsSync(path.join(targetDir, "new-file.json"))).toBe(false);
+    expect(fs.existsSync(targetDir)).toBe(true);
+  });
+
+  it("commit() keeps a patched file and clears patch tracking", () => {
+    const targetDir = path.join(parentDir, "existing-target");
+    fs.mkdirSync(targetDir);
+    fs.writeFileSync(path.join(targetDir, "package.json"), '{"name":"original"}');
+
+    const writer = new ProjectWriter(targetDir);
+    writer.patchFile("package.json", '{"name":"patched"}');
+    writer.commit();
+    writer.rollback();
+
+    expect(fs.readFileSync(path.join(targetDir, "package.json"), "utf-8")).toBe(
+      '{"name":"patched"}',
+    );
+  });
 });

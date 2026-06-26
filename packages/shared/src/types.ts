@@ -14,6 +14,10 @@ export interface ProjectPlan {
   packageManager: PackageManager;
   initGit: boolean;
   installDependencies: boolean;
+  /** `null` when no auth plugin was selected — auth is optional, unlike `framework`. */
+  auth: string | null;
+  /** Selected feature ids for the chosen auth plugin; empty when `auth` is `null`. */
+  authFeatures: string[];
 }
 
 export interface CommandRunResult {

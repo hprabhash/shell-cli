@@ -11,7 +11,7 @@ exists, why it's structured that way, and what's intentionally deferred.
 | 2   | Plugin architecture                                  | ✅ Done    |
 | 3   | Template engine                                      | ✅ Done    |
 | 4   | Next.js plugin (real `shell create` generation)      | ✅ Done    |
-| 5   | Better Auth plugin                                   | ⏳ Planned |
+| 5   | Better Auth plugin                                   | ✅ Done    |
 | 6   | Prisma / Drizzle / PostgreSQL plugins                | ⏳ Planned |
 | 7   | Template registry (remote, versioned, cached)        | ⏳ Planned |
 | 8   | Update mechanism                                     | ⏳ Planned |
@@ -296,3 +296,112 @@ file paths, so this only surfaced at commit time, not on a plain `pnpm lint`.
 Fixed by adding `--no-config-lookup --config eslint.config.js` (forces our one
 root config, skips the crash-prone per-file nested lookup) to every ESLint
 invocation (`lint`, `lint:fix`, and the `lint-staged` entry).
+
+## Phase 5 — Better Auth Plugin
+
+This is the largest phase so far — comparable to Phases 2+3+4 combined — because
+Better Auth's real architecture means **composing** one `auth.ts` from an
+arbitrary subset of 19 independently selectable features, not rendering one
+fixed template like Next.js's plugin.
+
+### Research before building
+
+Better Auth is young and fast-moving, so live docs were fetched the same way
+Next.js 16 was verified for Phase 4, rather than trusting training data that
+could be stale. Confirmed via the npm registry (`better-auth@1.6.22`) and
+`better-auth.com/docs`: `emailAndPassword`/`emailVerification`/
+`account.accountLinking`/`rateLimit`/`session` are core config keys, not
+plugins; `socialProviders.{google,github,discord,microsoft}` share one uniform
+`{clientId, clientSecret}` shape (one generic implementation covers all four);
+Apple is the exception (`clientSecret` is a JWT signed at request time from a
+`.p8` key, via `jose`, plus a `trustedOrigins` entry); `passkey` and `apiKey`
+have been extracted into separate npm packages (`@better-auth/passkey`,
+`@better-auth/api-key` — confirmed these exist on the registry, not
+hallucinated); "Teams" is a sub-option of `organization()`, not an independent
+plugin; "WebAuthn" and "Passkeys" are the same feature in Better Auth (no
+separate plugin) — collapsed into one, the one place the spec's 20-item list
+becomes 19 selectable features, because of real library structure. The CLI
+itself is published as the package `auth` (not `@better-auth/cli`), with
+`generate --yes`/`migrate --yes` auto-detecting `lib/auth.ts`.
+
+No Prisma/Drizzle/Postgres yet (Phase 6), so this phase uses Better Auth's
+documented zero-ORM path (`better-sqlite3` directly) so a generated app works
+immediately; Phase 6 will let users swap the adapter.
+
+### The generic plugin-question engine, finally built
+
+`core/run-plugin-questions.ts` turns a plugin's declarative `questions()` (added
+in Phase 2, deliberately left unconsumed until "a plugin with real multi-question
+needs exists to design it against") into a live flow by dispatching each
+`PluginQuestionDefinition` to the matching `core/prompts.ts` wrapper, keyed by
+`question.key`. Better Auth's feature picker — one `multiselect` listing all 19
+features — is that plugin.
+
+### The contribution model (`packages/plugin-better-auth/src/contribution.ts`)
+
+Each feature is a small module implementing `BetterAuthFeature`:
+`getContribution(selectedIds)` returns a `BetterAuthContribution` — pieces of
+`auth.ts`/`auth-client.ts`/`package.json`/`.env` it wants to contribute (a
+`config` object to deep-merge, `pluginCalls` to append to the `plugins: [...]`
+array, import lines, dependencies, env vars, standalone helper code). A `raw()`
+marker (`codegen/serialize-object.ts`) flags leaf values that must be emitted as
+literal source (`process.env.X as string`, `new Database(...)`) rather than a
+JSON-quoted string; `mergeContributions` folds every selected feature's
+contribution into one structure — deep-merging `config` (so `email-password`'s
+`emailAndPassword.enabled` and `password-reset`'s
+`emailAndPassword.sendResetPassword` combine correctly), deduping
+`trustedOrigins`/`envVars`, and merging import lines per module path
+(`codegen/merge-imports.ts` — several plugins importing from
+`better-auth/plugins` collapse into one `import { a, b, c } from "..."` line).
+This is deliberately string-tree serialization, not an AST library like
+ts-morph — sufficient for the job, smaller dependency footprint. "Teams" requires
+"Organization" (and `password-reset` requires `email-password`) via a generic
+`requires: string[]` field each feature can declare, checked once by
+`validateFeatureSelection` — no per-pair special-casing needed except that
+`organization.ts` itself reads whether `teams` is in the selected set to decide
+whether to pass `{teams: {enabled: true}}` into its own `organization()` call.
+
+### `@shell-cli/template-engine` extensions
+
+Two small, well-motivated additions, both reusable by Phase 6:
+
+- `ProjectWriter.patchFile()` — for a file a _previous_ plugin already wrote
+  (here, `package.json`, which the Next.js plugin creates and Better Auth then
+  adds dependencies to). Unlike `writeFile`, rollback restores the **original
+  content** instead of deleting a file this run didn't create.
+- `mergePackageJsonFragment()` — pure function merging
+  `dependencies`/`devDependencies`/`scripts` into an existing `package.json`
+  string without clobbering what's already there.
+
+### `postInstall`, used for real for the first time
+
+Better Auth's `postInstall()` runs `npx auth generate --yes` then
+`npx auth migrate --yes` in the generated project — exactly what Phase 2
+designed the hook for. `create.ts`'s pipeline now runs every selected plugin's
+`generate()`, then git-init, then dependency install, then every selected
+plugin's `postInstall()` (skipped with a log line if installation was skipped,
+since the migration needs the `auth` CLI to actually be resolvable) — wrapped in
+try/catch per plugin so one plugin's post-install failure warns rather than
+aborting the whole command.
+
+### `commands/create.ts`: one plugin to a list
+
+Generalized from resolving a single `framework` plugin to a `SelectedPlugin[]`.
+New `resolveAuth()` (prompts `Authentication:` with `None` + every registered
+auth plugin; `--auth <id>` flag) and `resolveAuthFeatures()` (interactive →
+`runPluginQuestions` + `plugin.validate()`; non-interactive → `--auth-features
+a,b,c`, defaulting to `["email-password"]` under `--yes`). `ProjectPlan` gained
+`auth: string | null` and `authFeatures: string[]`.
+
+### Verification
+
+Automated tests stay fast/offline (`--no-install`); the integration suite
+parses generated `auth.ts`/`auth-client.ts` through the TypeScript compiler
+(`ts.transpileModule`, zero diagnostics) for several feature combinations,
+including all 19 at once. The real, slow path was run manually once: scaffolded
+with installs on and a realistic feature set (email-password, google,
+two-factor, organization+teams, admin) — `better-sqlite3`'s native binary
+installed, `npx auth generate/migrate` created a real SQLite schema (the
+`sqlite.db` file), and `next build`/`next lint` both passed cleanly, with
+Better Auth itself emitting an honest runtime warning about the (intentionally)
+blank Google OAuth credentials rather than crashing.

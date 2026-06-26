@@ -1,3 +1,4 @@
+import betterAuthPlugin from "@shell-cli/plugin-better-auth";
 import nextPlugin from "@shell-cli/plugin-next";
 import {
   PluginError,
@@ -8,7 +9,7 @@ import {
   type PluginMetadata,
 } from "@shell-cli/shared";
 
-const BUILT_IN_PLUGINS: Plugin[] = [nextPlugin];
+const BUILT_IN_PLUGINS: Plugin[] = [nextPlugin, betterAuthPlugin];
 
 /** Validates a plugin's `register()` output every call — cheap, and keeps plugins honest. */
 export function getPluginMetadata(plugin: Plugin): PluginMetadata {

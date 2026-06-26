@@ -6,6 +6,7 @@ import {
   ValidationError,
   type FrameworkId,
   type PackageManager,
+  type Plugin,
   type ProjectPlan,
 } from "@shell-cli/shared";
 import type { Command } from "commander";
@@ -18,18 +19,28 @@ import { logger } from "../core/logger";
 import { detectAllPackageManagers, pickPreferredPackageManager } from "../core/package-manager";
 import { findPluginById, getPluginMetadata, getPluginsByCategory } from "../core/plugin-registry";
 import { intro, outro, promptConfirm, promptSelect, promptText } from "../core/prompts";
+import { runPluginQuestions } from "../core/run-plugin-questions";
 import {
   assertValidProjectName,
   describeTargetDirectory,
   validateProjectName,
 } from "../utils/validate-project-name";
 
+const NONE_AUTH_VALUE = "none";
+
 interface CreateCommandOptions {
   yes?: boolean;
   pm?: string;
   framework?: string;
+  auth?: string;
+  authFeatures?: string;
   git: boolean;
   install: boolean;
+}
+
+interface SelectedPlugin {
+  plugin: Plugin;
+  variables: Record<string, unknown>;
 }
 
 function assertRegisteredFramework(id: string): FrameworkId {
@@ -123,6 +134,73 @@ async function resolveFramework(command: Command, yes: boolean): Promise<Framewo
   return assertRegisteredFramework(selected);
 }
 
+/** Returns the selected auth plugin id, or `null` if the user opted out — auth is optional, unlike framework. */
+async function resolveAuth(command: Command, yes: boolean): Promise<string | null> {
+  const opts = command.opts<CreateCommandOptions>();
+  const authPlugins = getPluginsByCategory("auth");
+
+  if (opts.auth !== undefined) {
+    if (opts.auth === NONE_AUTH_VALUE) {
+      return null;
+    }
+    if (!findPluginById(opts.auth, authPlugins)) {
+      const available = authPlugins.map((p) => getPluginMetadata(p).id);
+      throw new ValidationError(
+        `Authentication plugin "${opts.auth}" isn't registered.`,
+        `Available: ${available.join(", ") || "none"}, or "${NONE_AUTH_VALUE}".`,
+      );
+    }
+    return opts.auth;
+  }
+
+  if (yes || authPlugins.length === 0) {
+    return null;
+  }
+
+  const selected = await promptSelect({
+    message: "Authentication:",
+    options: [
+      { value: NONE_AUTH_VALUE, label: "None" },
+      ...authPlugins.map((plugin) => {
+        const metadata = getPluginMetadata(plugin);
+        return { value: metadata.id, label: metadata.name, hint: metadata.description };
+      }),
+    ],
+    initialValue: NONE_AUTH_VALUE,
+  });
+  return selected === NONE_AUTH_VALUE ? null : selected;
+}
+
+/** Runs the auth plugin's own `questions()`/`validate()` — its multiselect feature picker. */
+async function resolveAuthFeatures(
+  plugin: Plugin,
+  command: Command,
+  yes: boolean,
+): Promise<string[]> {
+  const opts = command.opts<CreateCommandOptions>();
+  if (opts.authFeatures !== undefined) {
+    return opts.authFeatures
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+  }
+
+  if (yes) {
+    return ["email-password"];
+  }
+
+  const answers = await runPluginQuestions(plugin.questions());
+  const validation = plugin.validate(answers);
+  if (!validation.valid) {
+    throw new ValidationError(
+      `Invalid selection for the "${getPluginMetadata(plugin).name}" plugin.`,
+      validation.problems.join(" "),
+    );
+  }
+  const features = answers.features;
+  return Array.isArray(features) ? features.map(String) : [];
+}
+
 async function resolvePackageManager(command: Command, yes: boolean): Promise<PackageManager> {
   const opts = command.opts<CreateCommandOptions>();
   if (opts.pm !== undefined) {
@@ -177,27 +255,31 @@ function printPlanSummary(plan: ProjectPlan): void {
   logger.info(`  Project name:          ${plan.projectName}`);
   logger.info(`  Target directory:      ${plan.targetDir}`);
   logger.info(`  Framework:             ${plan.framework}`);
+  logger.info(`  Authentication:        ${plan.auth ?? "none"}`);
+  if (plan.authFeatures.length > 0) {
+    logger.info(`    Features:            ${plan.authFeatures.join(", ")}`);
+  }
   logger.info(`  Package manager:       ${plan.packageManager}`);
   logger.info(`  Initialize git:        ${plan.initGit ? "yes" : "no"}`);
   logger.info(`  Install dependencies:  ${plan.installDependencies ? "yes" : "no"}`);
   logger.debug(JSON.stringify(plan, null, 2));
 }
 
-async function generateProject(plan: ProjectPlan): Promise<void> {
-  const plugin = findPluginById(plan.framework);
-  const generate = plugin?.generate;
-  if (!generate) {
-    logger.warn(
-      `The "${plan.framework}" plugin doesn't implement generation yet — no files were written.`,
+async function generateAll(
+  selectedPlugins: readonly SelectedPlugin[],
+  targetDir: string,
+): Promise<void> {
+  for (const { plugin, variables } of selectedPlugins) {
+    const metadata = getPluginMetadata(plugin);
+    const generate = plugin.generate;
+    if (!generate) {
+      logger.warn(`The "${metadata.id}" plugin doesn't implement generation yet — skipped.`);
+      continue;
+    }
+    await logger.spinner(`Scaffolding (${metadata.name})...`, () =>
+      generate({ projectDir: targetDir, variables }),
     );
-    return;
   }
-  await logger.spinner("Scaffolding project...", () =>
-    generate({
-      projectDir: plan.targetDir,
-      variables: { projectName: plan.projectName, packageManager: plan.packageManager },
-    }),
-  );
 }
 
 async function runGitInitStep(targetDir: string): Promise<void> {
@@ -227,6 +309,29 @@ async function runInstallStep(targetDir: string, packageManager: PackageManager)
   }
 }
 
+/** Runs after dependency install (e.g. Better Auth's DB migration needs the `auth` CLI to be resolvable). Failures warn, not crash. */
+async function runPostInstallAll(
+  selectedPlugins: readonly SelectedPlugin[],
+  targetDir: string,
+): Promise<void> {
+  for (const { plugin } of selectedPlugins) {
+    const postInstall = plugin.postInstall;
+    if (!postInstall) {
+      continue;
+    }
+    const metadata = getPluginMetadata(plugin);
+    try {
+      await logger.spinner(`Running post-install steps (${metadata.name})...`, () =>
+        postInstall({ projectDir: targetDir }),
+      );
+    } catch (error) {
+      logger.warn(
+        `Post-install step for "${metadata.name}" failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+}
+
 function printSuccessMessage(plan: ProjectPlan): void {
   const runCommand = plan.packageManager === "npm" ? "npm run dev" : `${plan.packageManager} dev`;
   logger.info("");
@@ -247,6 +352,11 @@ export function registerCreateCommand(program: Command): void {
     .option("-y, --yes", "Skip prompts and use defaults / flags.")
     .option("--pm <packageManager>", "Package manager to use (npm, pnpm, yarn, bun).")
     .option("--framework <id>", "Framework to scaffold.")
+    .option("--auth <id>", `Authentication plugin to use (or "${NONE_AUTH_VALUE}").`)
+    .option(
+      "--auth-features <ids>",
+      "Comma-separated auth feature ids (skips the interactive picker).",
+    )
     .option("--git", "Initialize a git repository.", true)
     .option("--no-git", "Skip git initialization.")
     .option("--install", "Install dependencies.", true)
@@ -261,9 +371,29 @@ export function registerCreateCommand(program: Command): void {
       await confirmTargetDirectory(targetDir, yes);
 
       const framework = await resolveFramework(createCommand, yes);
+      const authPluginId = await resolveAuth(createCommand, yes);
       const packageManager = await resolvePackageManager(createCommand, yes);
       const initGit = await resolveGit(createCommand, yes);
       const installDependencies = await resolveInstall(createCommand, yes);
+
+      const selectedPlugins: SelectedPlugin[] = [];
+      const frameworkPlugin = findPluginById(framework);
+      if (frameworkPlugin) {
+        selectedPlugins.push({
+          plugin: frameworkPlugin,
+          variables: { projectName, packageManager },
+        });
+      }
+
+      let authFeatures: string[] = [];
+      if (authPluginId !== null) {
+        const authPlugin = findPluginById(authPluginId, getPluginsByCategory("auth"));
+        if (!authPlugin) {
+          throw new ValidationError(`Authentication plugin "${authPluginId}" isn't registered.`);
+        }
+        authFeatures = await resolveAuthFeatures(authPlugin, createCommand, yes);
+        selectedPlugins.push({ plugin: authPlugin, variables: { features: authFeatures } });
+      }
 
       const plan: ProjectPlan = {
         projectName,
@@ -272,16 +402,23 @@ export function registerCreateCommand(program: Command): void {
         packageManager,
         initGit,
         installDependencies,
+        auth: authPluginId,
+        authFeatures,
       };
 
       printPlanSummary(plan);
 
-      await generateProject(plan);
+      await generateAll(selectedPlugins, targetDir);
       if (plan.initGit) {
         await runGitInitStep(plan.targetDir);
       }
       if (plan.installDependencies) {
         await runInstallStep(plan.targetDir, plan.packageManager);
+        await runPostInstallAll(selectedPlugins, targetDir);
+      } else if (selectedPlugins.some(({ plugin }) => plugin.postInstall)) {
+        logger.info(
+          "Skipped post-install steps (e.g. database migrations) since dependencies weren't installed.",
+        );
       }
 
       printSuccessMessage(plan);
