@@ -5,17 +5,17 @@ exists, why it's structured that way, and what's intentionally deferred.
 
 ## Roadmap
 
-| #   | Phase                                                | Status     |
-| --- | ---------------------------------------------------- | ---------- |
-| 1   | CLI Core (commands, prompts, logging, configuration) | ✅ Done    |
-| 2   | Plugin architecture                                  | ✅ Done    |
-| 3   | Template engine                                      | ✅ Done    |
-| 4   | Next.js plugin (real `shell create` generation)      | ✅ Done    |
-| 5   | Better Auth plugin                                   | ✅ Done    |
-| 6   | Prisma / Drizzle / PostgreSQL plugins                | ✅ Done    |
-| 7   | Template registry (remote, versioned, cached)        | ✅ Done    |
-| 8   | Update mechanism                                     | ⏳ Planned |
-| 9   | Testing & CI/CD pipeline                             | ⏳ Planned |
+| #   | Phase                                                | Status  |
+| --- | ---------------------------------------------------- | ------- |
+| 1   | CLI Core (commands, prompts, logging, configuration) | ✅ Done |
+| 2   | Plugin architecture                                  | ✅ Done |
+| 3   | Template engine                                      | ✅ Done |
+| 4   | Next.js plugin (real `shell create` generation)      | ✅ Done |
+| 5   | Better Auth plugin                                   | ✅ Done |
+| 6   | Prisma / Drizzle / PostgreSQL plugins                | ✅ Done |
+| 7   | Template registry (remote, versioned, cached)        | ✅ Done |
+| 8   | Update mechanism                                     | ✅ Done |
+| 9   | Testing & CI/CD pipeline                             | ✅ Done |
 
 ## Phase 1 — CLI Core
 
@@ -27,7 +27,8 @@ exists, why it's structured that way, and what's intentionally deferred.
   the persisted config file. Plugin packages (Phase 2+) will depend on this, not on
   `cli-core`, to avoid a circular dependency between the core and its plugins.
 
-- **`packages/cli-core`** (published as `shell-cli`, bin name `shell`) — the CLI
+- **`packages/cli-core`** (published as `@hprabhash/shell-cli` as of Phase 9, bin
+  name `shell`) — the CLI
   itself: argument parsing (`commander`), the command implementations, and the core
   runtime services (logger, config store, prompts, package-manager detection, system
   checks).
@@ -75,7 +76,7 @@ of Phase 7 — see below), `cacheDir`.
 | `shell create [name]`                  | Real as of Phase 4 — see below.                                                                          |
 | `shell doctor`                         | Fully real: Node/git/package-manager detection, home-dir write check, best-effort registry reachability. |
 | `shell version`                        | Fully real.                                                                                              |
-| `shell update`                         | Fully real check-and-advise (registry lookup + semver compare); does not self-execute a global install.  |
+| `shell update [--yes] [--rollback]`    | Real as of Phase 8 — see below. Self-executes (with confirmation) and can roll back.                     |
 | `shell plugins`                        | Real as of Phase 2 — see below.                                                                          |
 | `shell config get/set/list/path/reset` | Fully real, schema-validated.                                                                            |
 | `shell template list/update/rollback`  | Real as of Phase 7 — see below.                                                                          |
@@ -736,3 +737,166 @@ mismatched LF version, then fixed with a new root `.gitattributes`
 content. Re-verified against the live URL after the CDN's `max-age=300`
 cache expired (confirmed via `Cache-Control`/`Source-Age` response headers)
 — `update` then succeeded for real, downloading and verifying all ten files.
+
+## Phase 8 — Self-Update Mechanism
+
+`shell update` (Phase 1) only ever printed the install command — this phase
+makes it actually run it, with a rollback path.
+
+### `packages/cli-core/src/core/self-update.ts` (new)
+
+The testable core, split out of the command file the same way `template.ts`
+delegates to `registry-client.ts`/`template-cache.ts` (Phase 7) — commands
+stay thin CLI-wiring layers; this is where the logic that's worth unit
+testing lives. `buildGlobalInstallCommand(pm, packageName, version)` returns
+a structured `{command, args}` (replacing the old plain string the
+function returned, which would have needed re-parsing to actually execute
+rather than just print) for each of the four package managers.
+`resolveInstallCommand` detects available package managers
+(`detectAllPackageManagers`, already existing) and picks one
+(`pickPreferredPackageManager`, already existing) — both now take an
+injectable `CommandRunner` for testing, mirroring `checkGit`'s pattern.
+`applyVersion(install, fromVersion, runner)` records `fromVersion` to
+config as `lastKnownGoodVersion` **before** running the install (so a
+later `--rollback` always swaps back to whichever version was active
+immediately before the most recent `update`/`rollback` — not just the
+first version ever replaced), then runs it via `realCommandRunner` and
+returns a plain result object — never throws, matching `runInstall`'s
+"a failed install shouldn't crash the command" philosophy.
+
+### `packages/shared`: `lastKnownGoodVersion` config field
+
+Added to `configSchema` (nullable string, default `null`). No new
+`config-store.ts` function needed — `loadConfig`/`saveConfig` already
+handle arbitrary schema fields.
+
+### `commands/update.ts`: confirm, apply, or roll back
+
+Default behavior is unchanged through the "is an update available" check.
+New: `-y/--yes` skips the confirmation prompt (`promptConfirm`, the same
+`core/prompts.ts` wrapper every other command uses) and applies
+immediately; declining the prompt falls back to printing the command, as
+before. `--rollback` reads `lastKnownGoodVersion` — a clear `ConfigError`
+if nothing's been applied yet ("roll back is only available after `shell
+update` has applied an update at least once"), otherwise resolves and
+(after the same confirm-or-`--yes` gate) applies that exact version.
+
+### A real bug this phase's own research surfaced
+
+Renaming the package (Phase 9, but discovered while planning _this_ phase)
+turned out not to be just a publishing nicety: the unscoped name `shell-cli`
+is already published on the real npm registry by someone unrelated. Before
+the rename, `shell update`'s e2e test hung for the full 30s timeout —
+`getLatestPublishedVersion("shell-cli")` was successfully resolving _their_
+package's version, `isUpdateAvailable` correctly saw it as newer than our
+local `0.1.0`, and the command proceeded to show an interactive confirm
+prompt with no TTY behind it to answer. Renaming to the confirmed-available
+`@hprabhash/shell-cli` fixed this for real (verified: the same command now
+gets a clean, fast 404 and degrades gracefully) — a second, independent
+reason the Phase 9 naming decision had to happen before this phase's tests
+could be trusted.
+
+### Verification
+
+Unit tests (`tests/unit/self-update.test.ts`) cover `buildGlobalInstallCommand`
+for all four package managers, `resolveInstallCommand` with an injected
+fake runner, `applyVersion`'s success/failure result shapes and its
+rollback-target bookkeeping (including that a _second_ applied update
+correctly swaps the rollback target rather than keeping the original).
+e2e: `shell update` against the real (unpublished) package name — exercises
+the genuine `NetworkError` degradation path, not a placeholder — and
+`shell update --rollback` with nothing ever applied, asserting the clear
+error rather than a crash.
+
+## Phase 9 — Testing & CI/CD Pipeline
+
+Most of "testing" was already real by this point — 7 phases' worth of
+unit/integration/e2e tests, strict TypeScript, ESLint/Prettier/Husky/
+lint-staged, all in place since Phase 1. What was missing: the package
+wasn't actually publishable, and there was no CI. Both needed the GitHub
+repo Phase 7 just connected.
+
+### A real bug found before any code ran: the package can't be installed as published
+
+`cli-core`'s `tsup.config.ts` has no `noExternal` — `dist/bin.js` imports
+`@shell-cli/plugin-better-auth` etc. as genuine external packages, not
+bundled. Every other `@shell-cli/*` package was `"private": true` and had
+never been published. Publishing `cli-core` exactly as it stood would have
+produced a broken install: npm would try to resolve six packages that
+don't exist on the registry.
+
+**Why bundling (the obvious fix) is wrong:** `plugin-next` resolves its
+`templates/next-app/` directory via `path.dirname(fileURLToPath(import.meta.url))`
+relative to its own compiled file's location. Bundling that code into
+`cli-core/dist/bin.js` would make `import.meta.url` resolve to _cli-core's_
+dist location instead, breaking template lookup — the other four plugins
+have no such dependency (inline string templates), but fixing some of six
+packages and not others is its own inconsistency.
+
+**Fix:** make every `@shell-cli/*` package a real, independently-published
+package instead — removed `"private": true`, added
+`"publishConfig": {"access": "public"}`, and (`plugin-next` only) a
+`"files"` field including `templates` alongside `dist` so its template
+tree actually ships. This is exactly the scenario Changesets exists for:
+multi-package monorepo releases where `workspace:*` needs rewriting to
+real version ranges at publish time — verified for real via `pnpm pack`
+on `cli-core` and inspecting the resulting tarball's `package.json`:
+every `@shell-cli/*` dependency had been rewritten from `workspace:*` to
+the literal current version (`0.1.0`), confirming an install would
+actually resolve correctly. `pnpm -r publish --dry-run` across every
+package (no network write, just packing/validation) also confirmed
+`plugin-next`'s tarball genuinely contains all 9 template files plus
+`dist/`, not just code.
+
+### Renaming `cli-core` to `@hprabhash/shell-cli`
+
+The unscoped name `shell-cli` is already taken on the public npm registry
+by an unrelated package (confirmed via the registry API) — `@hprabhash/shell-cli`
+is confirmed available. The `bin` field (`{"shell": "./dist/bin.js"}`) is
+unaffected — the command users type was never tied to the package name.
+The root workspace package's own name (`shell-cli-monorepo`) is untouched —
+it's `private`, never published, a purely internal label.
+
+### Changesets
+
+`.changeset/config.json` (`access: "public"`, matching every package's own
+`publishConfig`). Root scripts: `pnpm changeset` (describe a pending
+change's semver impact), `pnpm version-packages` (`changeset version` —
+bumps versions and CHANGELOGs from pending changesets), `pnpm release`
+(`pnpm build && changeset publish`). A changeset describing this phase's
+own changes (`self-update-and-publishing.md`) is committed alongside it —
+real usage of the tool being introduced, not just scaffolding.
+
+### `.github/workflows/`
+
+`ci.yml`: every push/PR to `main`, one `ubuntu-latest` job runs the full
+gate sequence (`build` → `typecheck` → `lint` → `format:check` → `test` →
+`test:integration` → `test:e2e`). No OS matrix — nothing in the suite
+asserts platform-specific behavior despite being developed on Windows;
+easy to add later if that changes. The e2e suite's `doctor`/registry
+checks hit real public endpoints exactly like they do locally —
+GitHub-hosted runners have outbound internet access by default.
+
+`release.yml`: on push to `main`, `changesets/action` either opens/updates
+a "Version Packages" PR (pending changesets) or runs `pnpm release`
+(a version-bump commit was just merged) — using `actions/setup-node`'s
+built-in `registry-url` + `NODE_AUTH_TOKEN` for npm auth (the standard
+mechanism, rather than committing a `_authToken` line to the repo's own
+`.npmrc`, which would print a "failed to replace env" warning on every
+local `pnpm install` since `NPM_TOKEN` is never set outside CI). No
+`NPM_TOKEN` secret is configured — by design, per the resolved decision to
+build the full pipeline without actually publishing yet. The publish half
+of this workflow has nothing to authenticate with until that secret is
+added; the version-PR half works today with no further setup.
+
+### Verification
+
+Full local gate sweep (build/typecheck/lint/format/unit/integration/e2e)
+green. `pnpm -r publish --dry-run` and a real `pnpm pack` + tarball
+inspection (above) in place of an actual publish, per the resolved
+decision not to publish today. Workflow YAML correctness is verified the
+same way every other phase verifies real infrastructure: pushed, then
+checked against GitHub's actual Actions API
+(`api.github.com/repos/hprabhash/shell-cli/actions/runs`) to confirm `ci.yml`
+genuinely ran and passed on GitHub's own runners — not just "the YAML
+looks right."

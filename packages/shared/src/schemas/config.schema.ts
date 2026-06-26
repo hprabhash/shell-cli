@@ -18,6 +18,8 @@ export const configSchema = z.object({
   telemetry: z.boolean().default(false),
   registryUrl: z.url().default(DEFAULT_REGISTRY_URL),
   cacheDir: z.string().default(() => path.join(os.homedir(), CONFIG_DIR_NAME, CACHE_DIR_NAME)),
+  /** The version `shell update` last replaced — lets `shell update --rollback` reinstall it without guessing. */
+  lastKnownGoodVersion: z.string().nullable().default(null),
 });
 
 export type ShellCliConfig = z.infer<typeof configSchema>;

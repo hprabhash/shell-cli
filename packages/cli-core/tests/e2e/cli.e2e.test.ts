@@ -63,6 +63,19 @@ describe("shell CLI (e2e)", () => {
     expect(result.stdout).toContain("Node.js version");
   });
 
+  it("update degrades gracefully when no version of this package is published yet", async () => {
+    const result = await runCli(["update"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Current version:");
+    expect(result.stdout + result.stderr).toContain("Could not check for updates");
+  });
+
+  it("update --rollback fails clearly when nothing has ever been applied", async () => {
+    const result = await runCli(["update", "--rollback"]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("no previous version recorded");
+  });
+
   it("round-trips config set/get", async () => {
     const setResult = await runCli(["config", "set", "packageManager", "pnpm"]);
     expect(setResult.exitCode).toBe(0);
@@ -81,6 +94,7 @@ describe("shell CLI (e2e)", () => {
       "telemetry",
       "registryUrl",
       "cacheDir",
+      "lastKnownGoodVersion",
     ]) {
       expect(result.stdout).toContain(key);
     }

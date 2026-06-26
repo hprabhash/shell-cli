@@ -1,5 +1,5 @@
 {
-  "name": "shell-cli",
+  "name": "@hprabhash/shell-cli",
   "version": "0.1.0",
   "description": "Plugin-driven full-stack project generator — scaffold Next.js, Better Auth, Prisma/Drizzle, PostgreSQL, and shadcn/ui apps with one command.",
   "license": "MIT",
