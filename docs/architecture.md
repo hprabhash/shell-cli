@@ -9,7 +9,7 @@ exists, why it's structured that way, and what's intentionally deferred.
 | --- | ---------------------------------------------------- | ---------- |
 | 1   | CLI Core (commands, prompts, logging, configuration) | ✅ Done    |
 | 2   | Plugin architecture                                  | ✅ Done    |
-| 3   | Template engine                                      | ⏳ Planned |
+| 3   | Template engine                                      | ✅ Done    |
 | 4   | Next.js plugin (real `shell create` generation)      | ⏳ Planned |
 | 5   | Better Auth plugin                                   | ⏳ Planned |
 | 6   | Prisma / Drizzle / PostgreSQL plugins                | ⏳ Planned |
@@ -153,3 +153,50 @@ The first concrete plugin: registers `{id: "next", category: "framework", ...}`,
 returns `[]` for `questions()` (nothing more to ask), always validates, and reports
 no doctor checks. Proves the contract with a real (if minimal) implementation rather
 than a fixture-only test.
+
+## Phase 3 — Template Engine
+
+### `packages/template-engine` (`@shell-cli/template-engine`)
+
+A new package, separate from `cli-core`, for the same reason `shared` is separate:
+plugin packages (`plugin-next` now, `plugin-better-auth`/`plugin-prisma`/etc. later)
+need to render templates without depending on `cli-core`. Nothing consumes it yet —
+`plugin-next.generate()` still doesn't exist, that's Phase 4 — this phase only
+builds and proves the engine in isolation.
+
+- **`engine.ts`** — a dedicated Handlebars instance (`Handlebars.create()`, not the
+  module-level default, so registering helpers/partials can't leak into other
+  consumers in the same process). Compiles with `noEscape: true` always: these
+  templates generate source code and config files, never HTML, and Handlebars'
+  default escaping would corrupt output the moment a variable contained a quote.
+  Ships four helpers Handlebars lacks natively — `eq`, `and`, `or`, `not` — so
+  multi-value conditionals (`{{#if (eq orm "prisma")}}`) are possible; "conditional
+  rendering" is an explicit requirement, not deferred. `registerPartialsDir(dir)`
+  registers every `*.hbs` under `dir` as a partial, named by its path **relative to
+  that directory** with the extension stripped (a file at `dir/sub/header.hbs`
+  becomes partial `sub/header`).
+- **`project-writer.ts`** — `ProjectWriter` is the rollback mechanism the spec asks
+  for ("rollback partially generated projects"). It records whether `targetDir`
+  existed before construction and tracks every file it writes/copies. `rollback()`
+  deletes everything it tracked; if `targetDir` didn't pre-exist it removes the
+  whole directory, otherwise it prunes back down to (but never removes) the
+  pre-existing `targetDir`, leaving prior content untouched. `commit()` clears
+  tracking so a stray later `rollback()` is inert.
+- **`render-tree.ts`** — `renderTemplateTree(templateRootDir, targetDir, variables)`
+  walks a template directory: `*.hbs` files are rendered and written without the
+  suffix, everything else is copied byte-for-byte. Any path segment starting with
+  `_` (convention: `_partials/`) is excluded from output and, if it's specifically
+  `_partials`, auto-registered before the walk — same idea as Eleventy's
+  `_includes`. On any failure mid-walk it calls `ProjectWriter.rollback()` before
+  rethrowing as `FileSystemError`. The function returns a `Promise` (via
+  `Promise.resolve().then(...)`, not `async`, since nothing here actually awaits
+  anything yet) so future plugins can do real async I/O in `generate()` without a
+  breaking signature change.
+
+### Gotcha worth documenting: standalone partials and trailing newlines
+
+Handlebars treats a partial reference that's alone on its own line as
+"standalone" and strips the line break that follows it in the _parent_ template —
+the partial's own content has to supply that newline itself, or output lines run
+together. Hit this writing the integration test fixture; not a bug, just a sharp
+edge worth remembering when writing real templates in Phase 4.
