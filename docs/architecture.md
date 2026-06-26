@@ -12,7 +12,7 @@ exists, why it's structured that way, and what's intentionally deferred.
 | 3   | Template engine                                      | ✅ Done    |
 | 4   | Next.js plugin (real `shell create` generation)      | ✅ Done    |
 | 5   | Better Auth plugin                                   | ✅ Done    |
-| 6   | Prisma / Drizzle / PostgreSQL plugins                | ⏳ Planned |
+| 6   | Prisma / Drizzle / PostgreSQL plugins                | ✅ Done    |
 | 7   | Template registry (remote, versioned, cached)        | ⏳ Planned |
 | 8   | Update mechanism                                     | ⏳ Planned |
 | 9   | Testing & CI/CD pipeline                             | ⏳ Planned |
@@ -405,3 +405,157 @@ installed, `npx auth generate/migrate` created a real SQLite schema (the
 `sqlite.db` file), and `next build`/`next lint` both passed cleanly, with
 Better Auth itself emitting an honest runtime warning about the (intentionally)
 blank Google OAuth credentials rather than crashing.
+
+## Phase 6 — Prisma / Drizzle / PostgreSQL Plugins
+
+Per the spec, database provider and ORM are independent prompts, not one
+combined choice. This phase adds `plugin-postgres` (category `database`),
+`plugin-prisma`/`plugin-drizzle` (category `orm`), and makes Better Auth
+**ORM-aware** — Phase 5 always used `better-sqlite3` directly; with an ORM
+selected, auth now goes through that ORM's database connection via the
+matching Better Auth adapter package instead.
+
+### Research before building
+
+Verified live rather than assumed, since Prisma was at a much newer major
+version than training data would suggest: `prisma@7.8.0`, `drizzle-orm@0.45.2`,
+`drizzle-kit@0.31.10`. Prisma 7 requires the driver-adapter architecture
+(`@prisma/adapter-pg` + `pg`) and a custom client output path
+(`generated/prisma`, gitignored). Better Auth's Prisma and Drizzle adapters
+both turned out to be **separate npm packages** lockstep-versioned with core
+(`@better-auth/prisma-adapter`, `@better-auth/drizzle-adapter`, both
+`1.6.22`) — `better-auth/adapters/prisma` is just a re-export wrapper around
+the former, not a bundled implementation as initially assumed; see below for
+why that distinction mattered.
+
+### `packages/plugin-postgres` (category `database`)
+
+`generate()` writes a real, working `docker-compose.yml` (`postgres:18`, fixed
+dev credentials) and contributes
+`DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app_dev` to
+`.env`/`.env.example` via the new `mergeEnvFile` — a connection string that
+genuinely works the moment `docker compose up -d` runs. `doctor()` warns if
+`docker` isn't on `PATH`. No `postInstall` — nothing to run without a live
+decision from the user about where Postgres actually runs.
+
+### `packages/plugin-prisma` / `packages/plugin-drizzle` (category `orm`)
+
+Each writes its own schema/client/config and patches `package.json` with its
+dependencies; `postInstall()` runs schema-file-only codegen (`prisma generate`
+/ `drizzle-kit generate`) — safe without a live database connection. Applying
+the schema (`prisma migrate dev` / `drizzle-kit push`) needs a reachable
+Postgres, which can't be assumed to exist, so that step is left to the user
+with clear `printSuccessMessage` instructions rather than silently attempted
+and likely failing.
+
+### `@shell-cli/template-engine`: three more extensions
+
+- `mergeEnvFile`/`appendGitignoreEntries` — append-if-missing, the same idea
+  as `mergePackageJsonFragment`, needed once more than one plugin writes into
+  the same `.env`/`.gitignore` (Postgres and Better Auth both want `.env`;
+  Next.js and Prisma both want `.gitignore`).
+- `mergeNextConfigServerExternalPackages` — append-if-missing into
+  `next.config.ts`'s `serverExternalPackages` array; see below for why this
+  exists.
+- `mergePackageJsonFragment` grew an `onlyBuiltDependencies` field, merged
+  into `pnpm.onlyBuiltDependencies`; see below for why this exists.
+
+### Better Auth becomes ORM-aware
+
+`packages/plugin-better-auth/src/database-adapter.ts`'s `resolveDatabaseAdapter(orm)`
+returns the imports/config-value/dependencies for whichever of three cases
+applies. `index.ts`'s `generate()` reads `context.variables.orm` (set by
+`create.ts` from the resolved `--orm`/prompt value, passed alongside
+`features`) and its `.env` writes use `patchFile` + `mergeEnvFile` so a
+database plugin's `DATABASE_URL`, written first, survives. `postInstall()`
+skips `auth migrate --yes` when an ORM is selected — only `generate --yes`;
+applying the ORM's own schema is the user's own, live-database-dependent step.
+
+### Real bugs only manual verification caught
+
+Every other phase's manual-verification section reports a clean pass. This
+one doesn't — running a real `shell create --orm prisma --auth better-auth
+--install` followed by a real `next build` (exactly the spec's own "don't
+generate placeholder code" discipline) surfaced five genuine bugs that no
+amount of file-existence-checking in automated tests would have caught,
+because nothing about the generated _files_ was wrong in isolation — only
+their behavior under real tooling was:
+
+1. **Prisma 7.8 rejects `url` in `schema.prisma`'s `datasource` block.**
+   The original schema (written against the documented driver-adapter
+   pattern) failed `prisma generate` with `P1012`: the connection string for
+   Migrate now belongs in a separate `prisma.config.ts`
+   (`defineConfig({ datasource: { url: env("DATABASE_URL") } })`), confirmed
+   directly against the installed `@prisma/config` package's own `.d.ts`
+   rather than trusting a single doc fetch. That config file is loaded as a
+   plain module (not auto-`.env`-loaded the way `schema.prisma`'s old
+   `env()` was), so it also needs its own `import "dotenv/config"` and a new
+   `dotenv` devDependency.
+2. **`better-auth/adapters/prisma`'s wildcard re-export doesn't resolve under
+   Turbopack.** `export * from "@better-auth/prisma-adapter"` resolves fine
+   under plain Node (verified directly) but Turbopack reports zero exports
+   through pnpm's peer-hashed package layout. Fixed by importing directly
+   from `@better-auth/prisma-adapter`, matching the shape already used for
+   Drizzle's adapter.
+3. \*_Two more Turbopack resolution failures, one Prisma-specific (dynamic
+   `import()` of `@prisma/client/runtime/query_compiler_fast_bg._` WASM
+files) and one universal to Better Auth itself (`@better-auth/telemetry`,
+a direct dependency of `better-auth`core, fails to resolve regardless of
+ORM — reproduced even with`better-sqlite3`and no ORM at all).`serverExternalPackages`alone fixed neither under Turbopack; an
+isolated`next build --webpack`on the identical project succeeded
+immediately. Fixed by having both`plugin-prisma`and`plugin-better-auth`patch the generated`dev`/`build`scripts to`--webpack`, and contributing
+their respective native/WASM-backed packages
+(`@prisma/client`/`pg`/`better-sqlite3`) to `serverExternalPackages` via
+   the new shared helper — kept in both plugins independently since either
+   can run without the other.
+4. **`better-sqlite3`'s native binary silently never gets built.** pnpm
+   blocks a dependency's install/build script by default since v9
+   ("Ignored build scripts" warning) — `pnpm install` exits 0, but
+   `new Database(...)` then fails at runtime with "Could not locate the
+   bindings file." Fixed by having the sqlite branch of
+   `resolveDatabaseAdapter` contribute `better-sqlite3` to a new
+   `pnpm.onlyBuiltDependencies` field in the generated `package.json` —
+   the same mechanism this monorepo's own root `package.json` already uses
+   for `esbuild`.
+5. **`plugin-drizzle`'s placeholder `schema.ts` wasn't a valid ES module.**
+   A file containing only comments has no import/export statement, so
+   TypeScript treats it as a global script, not a module — `import * as
+schema from "./schema"` in `lib/db/index.ts` failed with "File is not a
+   module" the moment a real `tsc`/`next build` ran, before `auth generate`
+   ever gets a chance to add real exports. Fixed with a trailing `export {};`.
+
+All five were caught and fixed in the same manual-verification pass that
+Phase 4/5 reported clean; the corresponding unit/integration/e2e tests were
+extended afterward to cover each one (e.g. asserting `prisma.config.ts`
+content, `serverExternalPackages`/`onlyBuiltDependencies` patches, and the
+`export {};` line) so they're now regression-checked automatically.
+
+### `commands/create.ts`: `resolveOrm`/`resolveDatabase`
+
+Prompt order follows the spec's literal sequence — `resolveOrm()` (`None` /
+every registered `orm` plugin) first, then `resolveDatabase()` only if an ORM
+was selected (there's no database to provision without an ORM to use it
+yet). Plugin **execution** order is independent of prompt order: framework →
+database → orm → auth, so an ORM's `postInstall` codegen (e.g. `prisma
+generate`, which produces the client `lib/auth.ts` imports) always runs
+before Better Auth's `auth generate --yes`. The auth plugin's `variables`
+object is given `orm: <selected orm id or null>` alongside `features` so
+`resolveDatabaseAdapter()` receives it regardless of how the other plugins
+were ordered. `ProjectPlan` gained `orm: string | null` and
+`database: string | null`; `printSuccessMessage` now suggests
+`docker compose up -d` / `prisma migrate dev` / `drizzle-kit push` as
+appropriate next steps instead of silently omitting them.
+
+### Verification
+
+Unit tests cover each new plugin's `generate()` output, the three new
+template-engine merge helpers, and all branches of `resolveDatabaseAdapter`.
+An integration suite (`packages/cli-core/tests/integration/orm-combo.test.ts`)
+composes Next.js + Postgres + Prisma + Better Auth (and the Drizzle
+equivalent) into one temp directory and checks the result through
+`ts.transpileModule` for zero diagnostics. e2e tests cover `--orm`/`--database`
+flag validation (rejecting `--database` without `--orm`, defaulting under
+`--yes`) end to end. Manual verification (see above) ran all three real
+combinations — Prisma+Postgres, Drizzle+Postgres, and the no-ORM SQLite
+default — through a genuine `pnpm install` + `pnpm run build` + `pnpm run
+lint`, all green, after the five fixes above.

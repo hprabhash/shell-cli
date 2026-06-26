@@ -70,6 +70,8 @@ export interface PluginGenerateContext {
 
 export interface PluginPostInstallContext {
   projectDir: string;
+  /** The same `variables` the plugin's own `generate()` received — e.g. so Better Auth's `postInstall` can tell whether an ORM was selected. */
+  variables: Record<string, unknown>;
 }
 
 /**

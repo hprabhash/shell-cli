@@ -21,9 +21,22 @@ function makePlugin(overrides: Partial<Plugin> = {}): Plugin {
 }
 
 describe("getAllPlugins / getPluginsByCategory / findPluginById", () => {
-  it("includes the real built-in next plugin by default", () => {
+  it("includes the real built-in plugins by default", () => {
     expect(getAllPlugins().length).toBeGreaterThan(0);
     expect(findPluginById("next")).toBeDefined();
+    expect(findPluginById("prisma")).toBeDefined();
+    expect(findPluginById("drizzle")).toBeDefined();
+    expect(findPluginById("postgresql")).toBeDefined();
+    expect(findPluginById("better-auth")).toBeDefined();
+  });
+
+  it("categorizes the new Phase 6 plugins correctly", () => {
+    expect(getPluginsByCategory("orm").map((p) => getPluginMetadata(p).id)).toEqual(
+      expect.arrayContaining(["prisma", "drizzle"]),
+    );
+    expect(getPluginsByCategory("database").map((p) => getPluginMetadata(p).id)).toEqual(
+      expect.arrayContaining(["postgresql"]),
+    );
   });
 
   it("filters by category against an injected plugin list", () => {

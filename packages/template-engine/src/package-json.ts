@@ -4,6 +4,16 @@ export interface PackageJsonFragment {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
+  /**
+   * Appended into `pnpm.onlyBuiltDependencies` — pnpm blocks a native
+   * dependency's install/build script by default, so without this a package
+   * like `better-sqlite3` installs with no compiled binary at all.
+   */
+  onlyBuiltDependencies?: string[];
+}
+
+interface PnpmConfig {
+  onlyBuiltDependencies?: string[];
 }
 
 type MergeableKey = "dependencies" | "devDependencies" | "scripts";
@@ -37,6 +47,15 @@ export function mergePackageJsonFragment(
     }
     const current = (parsed[key] as Record<string, string> | undefined) ?? {};
     parsed[key] = { ...current, ...incoming };
+  }
+
+  if (fragment.onlyBuiltDependencies && fragment.onlyBuiltDependencies.length > 0) {
+    const pnpmConfig = (parsed.pnpm as PnpmConfig | undefined) ?? {};
+    const existing = pnpmConfig.onlyBuiltDependencies ?? [];
+    parsed.pnpm = {
+      ...pnpmConfig,
+      onlyBuiltDependencies: [...new Set([...existing, ...fragment.onlyBuiltDependencies])],
+    };
   }
 
   return `${JSON.stringify(parsed, null, 2)}\n`;

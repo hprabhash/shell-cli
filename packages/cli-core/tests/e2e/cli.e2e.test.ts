@@ -228,10 +228,24 @@ describe("shell CLI (e2e)", () => {
 
     const packageJson = JSON.parse(
       fs.readFileSync(path.join(targetDir, "package.json"), "utf-8"),
-    ) as { name: string; dependencies: Record<string, string> };
+    ) as {
+      name: string;
+      dependencies: Record<string, string>;
+      scripts: Record<string, string>;
+      pnpm?: { onlyBuiltDependencies?: string[] };
+    };
     expect(packageJson.name).toBe("auth-app");
     expect(packageJson.dependencies.next).toBeDefined();
     expect(packageJson.dependencies["better-auth"]).toBeDefined();
+    // Turbopack can't resolve Better Auth's own nested `@better-auth/telemetry`
+    // dependency, regardless of which database adapter is in use.
+    expect(packageJson.scripts.build).toBe("next build --webpack");
+    // pnpm blocks better-sqlite3's own install script by default — without
+    // this, `pnpm install` "succeeds" but the native binary never gets built.
+    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(["better-sqlite3"]);
+
+    const nextConfig = fs.readFileSync(path.join(targetDir, "next.config.ts"), "utf-8");
+    expect(nextConfig).toContain('serverExternalPackages: ["better-sqlite3"]');
   });
 
   it("create without --auth still works exactly as before (no auth files)", async () => {
@@ -278,5 +292,148 @@ describe("shell CLI (e2e)", () => {
     ]);
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain("isn't registered");
+  });
+
+  it("create with --orm prisma --database postgresql scaffolds Prisma + docker-compose", async () => {
+    const targetDir = path.join(tmpHome, "prisma-app");
+    const result = await runCli([
+      "create",
+      "prisma-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--orm",
+      "prisma",
+      "--database",
+      "postgresql",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ORM:                   prisma");
+    expect(result.stdout).toContain("Database:              postgresql");
+    expect(fs.existsSync(path.join(targetDir, "prisma", "schema.prisma"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "prisma.config.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "lib", "prisma.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(true);
+
+    const env = fs.readFileSync(path.join(targetDir, ".env"), "utf-8");
+    expect(env).toContain("DATABASE_URL=");
+
+    const nextConfig = fs.readFileSync(path.join(targetDir, "next.config.ts"), "utf-8");
+    expect(nextConfig).toContain("serverExternalPackages");
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(targetDir, "package.json"), "utf-8"),
+    ) as { scripts: Record<string, string> };
+    expect(packageJson.scripts.build).toBe("next build --webpack");
+  });
+
+  it("create with --orm drizzle defaults the database to the first registered provider under --yes", async () => {
+    const targetDir = path.join(tmpHome, "drizzle-app");
+    const result = await runCli([
+      "create",
+      "drizzle-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--orm",
+      "drizzle",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ORM:                   drizzle");
+    expect(fs.existsSync(path.join(targetDir, "drizzle.config.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "lib", "db", "index.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(true);
+  });
+
+  it("create with --orm drizzle --database none skips provisioning a database", async () => {
+    const targetDir = path.join(tmpHome, "drizzle-no-db-app");
+    const result = await runCli([
+      "create",
+      "drizzle-no-db-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--orm",
+      "drizzle",
+      "--database",
+      "none",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Database:              none");
+    expect(fs.existsSync(path.join(targetDir, "drizzle.config.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(false);
+  });
+
+  it("create without --orm scaffolds no ORM/database files (regression)", async () => {
+    const targetDir = path.join(tmpHome, "no-orm-app");
+    const result = await runCli([
+      "create",
+      "no-orm-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ORM:                   none");
+    expect(result.stdout).toContain("Database:              none");
+    expect(fs.existsSync(path.join(targetDir, "prisma"))).toBe(false);
+    expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(false);
+  });
+
+  it("rejects --database without --orm", async () => {
+    const result = await runCli([
+      "create",
+      "bad-database-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--database",
+      "postgresql",
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("--database requires an ORM");
+  });
+
+  it("create with --orm prisma --auth better-auth wires Better Auth to the Prisma adapter", async () => {
+    const targetDir = path.join(tmpHome, "prisma-auth-app");
+    const result = await runCli([
+      "create",
+      "prisma-auth-app",
+      "--yes",
+      "--pm",
+      "npm",
+      "--orm",
+      "prisma",
+      "--auth",
+      "better-auth",
+      "--auth-features",
+      "email-password",
+      "--no-git",
+      "--no-install",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const authSource = fs.readFileSync(path.join(targetDir, "lib", "auth.ts"), "utf-8");
+    expect(authSource).toContain("prismaAdapter");
+    expect(authSource).toContain('from "./prisma"');
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(targetDir, "package.json"), "utf-8"),
+    ) as { dependencies: Record<string, string>; scripts: Record<string, string> };
+    expect(packageJson.dependencies["@prisma/client"]).toBeDefined();
+    expect(packageJson.dependencies["@better-auth/prisma-adapter"]).toBeDefined();
+    expect(packageJson.dependencies["better-sqlite3"]).toBeUndefined();
+    expect(packageJson.scripts.build).toBe("next build --webpack");
   });
 });

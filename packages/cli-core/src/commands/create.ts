@@ -27,11 +27,15 @@ import {
 } from "../utils/validate-project-name";
 
 const NONE_AUTH_VALUE = "none";
+const NONE_ORM_VALUE = "none";
+const NONE_DATABASE_VALUE = "none";
 
 interface CreateCommandOptions {
   yes?: boolean;
   pm?: string;
   framework?: string;
+  orm?: string;
+  database?: string;
   auth?: string;
   authFeatures?: string;
   git: boolean;
@@ -50,6 +54,30 @@ function assertRegisteredFramework(id: string): FrameworkId {
     throw new ValidationError(
       `Framework "${id}" isn't registered.`,
       `Available: ${available.join(", ") || "none"}. See docs/architecture.md for the roadmap.`,
+    );
+  }
+  return id;
+}
+
+function assertRegisteredOrm(id: string): string {
+  const plugin = findPluginById(id, getPluginsByCategory("orm"));
+  if (!plugin) {
+    const available = getPluginsByCategory("orm").map((p) => getPluginMetadata(p).id);
+    throw new ValidationError(
+      `ORM "${id}" isn't registered.`,
+      `Available: ${available.join(", ") || "none"}, or "${NONE_ORM_VALUE}".`,
+    );
+  }
+  return id;
+}
+
+function assertRegisteredDatabase(id: string): string {
+  const plugin = findPluginById(id, getPluginsByCategory("database"));
+  if (!plugin) {
+    const available = getPluginsByCategory("database").map((p) => getPluginMetadata(p).id);
+    throw new ValidationError(
+      `Database "${id}" isn't registered.`,
+      `Available: ${available.join(", ") || "none"}, or "${NONE_DATABASE_VALUE}".`,
     );
   }
   return id;
@@ -132,6 +160,86 @@ async function resolveFramework(command: Command, yes: boolean): Promise<Framewo
     })),
   });
   return assertRegisteredFramework(selected);
+}
+
+/** Returns the selected ORM plugin id, or `null` if the user opted out — an ORM is optional, unlike framework. */
+async function resolveOrm(command: Command, yes: boolean): Promise<string | null> {
+  const opts = command.opts<CreateCommandOptions>();
+  const ormPlugins = getPluginsByCategory("orm");
+
+  if (opts.orm !== undefined) {
+    if (opts.orm === NONE_ORM_VALUE) {
+      return null;
+    }
+    return assertRegisteredOrm(opts.orm);
+  }
+
+  if (yes || ormPlugins.length === 0) {
+    return null;
+  }
+
+  const selected = await promptSelect({
+    message: "ORM:",
+    options: [
+      { value: NONE_ORM_VALUE, label: "None" },
+      ...ormPlugins.map((plugin) => {
+        const metadata = getPluginMetadata(plugin);
+        return { value: metadata.id, label: metadata.name, hint: metadata.description };
+      }),
+    ],
+    initialValue: NONE_ORM_VALUE,
+  });
+  return selected === NONE_ORM_VALUE ? null : selected;
+}
+
+/**
+ * Returns the selected database plugin id, or `null`. Only asked when an ORM was
+ * selected — there's no database to provision without an ORM to use it yet.
+ */
+async function resolveDatabase(
+  command: Command,
+  yes: boolean,
+  ormSelected: boolean,
+): Promise<string | null> {
+  const opts = command.opts<CreateCommandOptions>();
+
+  if (!ormSelected) {
+    if (opts.database !== undefined && opts.database !== NONE_DATABASE_VALUE) {
+      throw new ValidationError(
+        "--database requires an ORM.",
+        "Pass --orm <id> as well, or omit --database.",
+      );
+    }
+    return null;
+  }
+
+  if (opts.database !== undefined) {
+    if (opts.database === NONE_DATABASE_VALUE) {
+      return null;
+    }
+    return assertRegisteredDatabase(opts.database);
+  }
+
+  const databasePlugins = getPluginsByCategory("database");
+  const choices = databasePlugins.map((plugin) => getPluginMetadata(plugin));
+  const [firstChoice] = choices;
+  if (firstChoice === undefined) {
+    return null;
+  }
+
+  if (yes) {
+    return firstChoice.id;
+  }
+
+  const selected = await promptSelect({
+    message: "Database:",
+    options: choices.map((metadata) => ({
+      value: metadata.id,
+      label: metadata.name,
+      hint: metadata.description,
+    })),
+  });
+  return assertRegisteredDatabase(selected);
 }
 
 /** Returns the selected auth plugin id, or `null` if the user opted out — auth is optional, unlike framework. */
@@ -255,6 +363,8 @@ function printPlanSummary(plan: ProjectPlan): void {
   logger.info(`  Project name:          ${plan.projectName}`);
   logger.info(`  Target directory:      ${plan.targetDir}`);
   logger.info(`  Framework:             ${plan.framework}`);
+  logger.info(`  ORM:                   ${plan.orm ?? "none"}`);
+  logger.info(`  Database:              ${plan.database ?? "none"}`);
   logger.info(`  Authentication:        ${plan.auth ?? "none"}`);
   if (plan.authFeatures.length > 0) {
     logger.info(`    Features:            ${plan.authFeatures.join(", ")}`);
@@ -314,7 +424,7 @@ async function runPostInstallAll(
   selectedPlugins: readonly SelectedPlugin[],
   targetDir: string,
 ): Promise<void> {
-  for (const { plugin } of selectedPlugins) {
+  for (const { plugin, variables } of selectedPlugins) {
     const postInstall = plugin.postInstall;
     if (!postInstall) {
       continue;
@@ -322,7 +432,7 @@ async function runPostInstallAll(
     const metadata = getPluginMetadata(plugin);
     try {
       await logger.spinner(`Running post-install steps (${metadata.name})...`, () =>
-        postInstall({ projectDir: targetDir }),
+        postInstall({ projectDir: targetDir, variables }),
       );
     } catch (error) {
       logger.warn(
@@ -342,6 +452,14 @@ function printSuccessMessage(plan: ProjectPlan): void {
   if (!plan.installDependencies) {
     logger.info(`  ${plan.packageManager} install`);
   }
+  if (plan.database === "postgresql") {
+    logger.info("  docker compose up -d");
+  }
+  if (plan.orm === "prisma") {
+    logger.info("  npx prisma migrate dev");
+  } else if (plan.orm === "drizzle") {
+    logger.info("  npx drizzle-kit push");
+  }
   logger.info(`  ${runCommand}`);
 }
 
@@ -352,6 +470,8 @@ export function registerCreateCommand(program: Command): void {
     .option("-y, --yes", "Skip prompts and use defaults / flags.")
     .option("--pm <packageManager>", "Package manager to use (npm, pnpm, yarn, bun).")
     .option("--framework <id>", "Framework to scaffold.")
+    .option("--orm <id>", `ORM to use (or "${NONE_ORM_VALUE}").`)
+    .option("--database <id>", `Database to use (or "${NONE_DATABASE_VALUE}"). Requires --orm.`)
     .option("--auth <id>", `Authentication plugin to use (or "${NONE_AUTH_VALUE}").`)
     .option(
       "--auth-features <ids>",
@@ -371,11 +491,17 @@ export function registerCreateCommand(program: Command): void {
       await confirmTargetDirectory(targetDir, yes);
 
       const framework = await resolveFramework(createCommand, yes);
+      const ormPluginId = await resolveOrm(createCommand, yes);
+      const databasePluginId = await resolveDatabase(createCommand, yes, ormPluginId !== null);
       const authPluginId = await resolveAuth(createCommand, yes);
       const packageManager = await resolvePackageManager(createCommand, yes);
       const initGit = await resolveGit(createCommand, yes);
       const installDependencies = await resolveInstall(createCommand, yes);
 
+      // Execution order is framework -> database -> orm -> auth, independent of the
+      // prompt order above: the ORM's postInstall codegen (e.g. `prisma generate`,
+      // which produces the client `lib/auth.ts` imports) must run before Better
+      // Auth's `auth generate --yes`, which needs that generated client importable.
       const selectedPlugins: SelectedPlugin[] = [];
       const frameworkPlugin = findPluginById(framework);
       if (frameworkPlugin) {
@@ -385,6 +511,25 @@ export function registerCreateCommand(program: Command): void {
         });
       }
 
+      if (databasePluginId !== null) {
+        const databasePlugin = findPluginById(databasePluginId, getPluginsByCategory("database"));
+        if (!databasePlugin) {
+          throw new ValidationError(`Database plugin "${databasePluginId}" isn't registered.`);
+        }
+        selectedPlugins.push({
+          plugin: databasePlugin,
+          variables: { projectName, packageManager },
+        });
+      }
+
+      if (ormPluginId !== null) {
+        const ormPlugin = findPluginById(ormPluginId, getPluginsByCategory("orm"));
+        if (!ormPlugin) {
+          throw new ValidationError(`ORM plugin "${ormPluginId}" isn't registered.`);
+        }
+        selectedPlugins.push({ plugin: ormPlugin, variables: { projectName, packageManager } });
+      }
+
       let authFeatures: string[] = [];
       if (authPluginId !== null) {
         const authPlugin = findPluginById(authPluginId, getPluginsByCategory("auth"));
@@ -392,7 +537,10 @@ export function registerCreateCommand(program: Command): void {
           throw new ValidationError(`Authentication plugin "${authPluginId}" isn't registered.`);
         }
         authFeatures = await resolveAuthFeatures(authPlugin, createCommand, yes);
-        selectedPlugins.push({ plugin: authPlugin, variables: { features: authFeatures } });
+        selectedPlugins.push({
+          plugin: authPlugin,
+          variables: { features: authFeatures, orm: ormPluginId },
+        });
       }
 
       const plan: ProjectPlan = {
@@ -402,6 +550,8 @@ export function registerCreateCommand(program: Command): void {
         packageManager,
         initGit,
         installDependencies,
+        orm: ormPluginId,
+        database: databasePluginId,
         auth: authPluginId,
         authFeatures,
       };

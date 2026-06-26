@@ -1,5 +1,8 @@
 import betterAuthPlugin from "@shell-cli/plugin-better-auth";
+import drizzlePlugin from "@shell-cli/plugin-drizzle";
 import nextPlugin from "@shell-cli/plugin-next";
+import postgresPlugin from "@shell-cli/plugin-postgres";
+import prismaPlugin from "@shell-cli/plugin-prisma";
 import {
   PluginError,
   pluginMetadataSchema,
@@ -9,7 +12,15 @@ import {
   type PluginMetadata,
 } from "@shell-cli/shared";
 
-const BUILT_IN_PLUGINS: Plugin[] = [nextPlugin, betterAuthPlugin];
+// Order mirrors the spec's own prompt sequence (Framework, ORM, Database, Auth) —
+// `getPluginsByCategory`'s "first" default under `--yes` follows this order.
+const BUILT_IN_PLUGINS: Plugin[] = [
+  nextPlugin,
+  prismaPlugin,
+  drizzlePlugin,
+  postgresPlugin,
+  betterAuthPlugin,
+];
 
 /** Validates a plugin's `register()` output every call — cheap, and keeps plugins honest. */
 export function getPluginMetadata(plugin: Plugin): PluginMetadata {

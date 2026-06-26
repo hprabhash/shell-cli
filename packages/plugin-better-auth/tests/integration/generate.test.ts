@@ -82,6 +82,15 @@ describe("plugin-better-auth generate() (integration)", () => {
     expect(packageJson.devDependencies.auth).toBeDefined();
   });
 
+  it("allows better-sqlite3's install script via pnpm.onlyBuiltDependencies (no ORM)", async () => {
+    await generate({ projectDir, variables: { features: ["email-password"] } });
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(projectDir, "package.json"), "utf-8"),
+    ) as { pnpm?: { onlyBuiltDependencies?: string[] } };
+    expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(["better-sqlite3"]);
+  });
+
   it("writes .env with a real secret and .env.example with a blank one", async () => {
     await generate({ projectDir, variables: { features: ["google"] } });
 
@@ -92,6 +101,33 @@ describe("plugin-better-auth generate() (integration)", () => {
     expect(envExample).toMatch(/BETTER_AUTH_SECRET=\s*$/m);
     expect(env).toContain("GOOGLE_CLIENT_ID=");
     expect(envExample).toContain("GOOGLE_CLIENT_ID=");
+  });
+
+  it("forces webpack and patches next.config.ts's serverExternalPackages when present", async () => {
+    fs.writeFileSync(
+      path.join(projectDir, "next.config.ts"),
+      [
+        'import type { NextConfig } from "next";',
+        "",
+        "const nextConfig: NextConfig = {",
+        "  /* config options here */",
+        "};",
+        "",
+        "export default nextConfig;",
+        "",
+      ].join("\n"),
+    );
+
+    await generate({ projectDir, variables: { features: ["email-password"] } });
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(projectDir, "package.json"), "utf-8"),
+    ) as { scripts: Record<string, string> };
+    expect(packageJson.scripts.dev).toBe("next dev --webpack");
+    expect(packageJson.scripts.build).toBe("next build --webpack");
+
+    const nextConfig = fs.readFileSync(path.join(projectDir, "next.config.ts"), "utf-8");
+    expect(nextConfig).toContain('serverExternalPackages: ["better-sqlite3"]');
   });
 
   it("writes the auth API route handler", async () => {

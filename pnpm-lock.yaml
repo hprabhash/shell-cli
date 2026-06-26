@@ -50,9 +50,18 @@ importers:
       '@shell-cli/plugin-better-auth':
         specifier: workspace:*
         version: link:../plugin-better-auth
+      '@shell-cli/plugin-drizzle':
+        specifier: workspace:*
+        version: link:../plugin-drizzle
       '@shell-cli/plugin-next':
         specifier: workspace:*
         version: link:../plugin-next
+      '@shell-cli/plugin-postgres':
+        specifier: workspace:*
+        version: link:../plugin-postgres
+      '@shell-cli/plugin-prisma':
+        specifier: workspace:*
+        version: link:../plugin-prisma
       '@shell-cli/shared':
         specifier: workspace:*
         version: link:../shared
@@ -85,6 +94,18 @@ importers:
         specifier: ^9.6.1
         version: 9.6.1
 
+  packages/plugin-drizzle:
+    dependencies:
+      '@shell-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@shell-cli/template-engine':
+        specifier: workspace:*
+        version: link:../template-engine
+      execa:
+        specifier: ^9.6.1
+        version: 9.6.1
+
   packages/plugin-next:
     dependencies:
       '@shell-cli/shared':
@@ -93,6 +114,30 @@ importers:
       '@shell-cli/template-engine':
         specifier: workspace:*
         version: link:../template-engine
+
+  packages/plugin-postgres:
+    dependencies:
+      '@shell-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@shell-cli/template-engine':
+        specifier: workspace:*
+        version: link:../template-engine
+      execa:
+        specifier: ^9.6.1
+        version: 9.6.1
+
+  packages/plugin-prisma:
+    dependencies:
+      '@shell-cli/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@shell-cli/template-engine':
+        specifier: workspace:*
+        version: link:../template-engine
+      execa:
+        specifier: ^9.6.1
+        version: 9.6.1
 
   packages/shared:
     dependencies:

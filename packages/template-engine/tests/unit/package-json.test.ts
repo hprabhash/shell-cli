@@ -9,6 +9,7 @@ interface ParsedPackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
+  pnpm?: { onlyBuiltDependencies?: string[] };
 }
 
 function parse(json: string): ParsedPackageJson {
@@ -52,5 +53,29 @@ describe("mergePackageJsonFragment", () => {
 
   it("throws a clear error for invalid JSON", () => {
     expect(() => mergePackageJsonFragment("not json", {})).toThrow(/Could not parse/);
+  });
+
+  it("creates pnpm.onlyBuiltDependencies when none exists", () => {
+    const existing = JSON.stringify({ name: "app" });
+    const result = mergePackageJsonFragment(existing, {
+      onlyBuiltDependencies: ["better-sqlite3"],
+    });
+    expect(parse(result).pnpm).toEqual({ onlyBuiltDependencies: ["better-sqlite3"] });
+  });
+
+  it("appends to an existing pnpm.onlyBuiltDependencies without duplicating entries", () => {
+    const existing = JSON.stringify({ pnpm: { onlyBuiltDependencies: ["esbuild"] } });
+    const result = mergePackageJsonFragment(existing, {
+      onlyBuiltDependencies: ["esbuild", "better-sqlite3"],
+    });
+    expect(parse(result).pnpm).toEqual({
+      onlyBuiltDependencies: ["esbuild", "better-sqlite3"],
+    });
+  });
+
+  it("leaves pnpm config untouched when onlyBuiltDependencies is empty", () => {
+    const existing = JSON.stringify({ name: "app" });
+    const result = mergePackageJsonFragment(existing, { onlyBuiltDependencies: [] });
+    expect(parse(result).pnpm).toBeUndefined();
   });
 });
