@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { startTestRegistryServer, type TestRegistryServer } from "../fixtures/test-registry-server";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const binPath = path.resolve(here, "../../dist/bin.js");
 
@@ -87,16 +89,6 @@ describe("shell CLI (e2e)", () => {
   it("cache clear exits 0 even when the cache dir doesn't exist", async () => {
     const result = await runCli(["cache", "clear"]);
     expect(result.exitCode).toBe(0);
-  });
-
-  it("template list/update print a forward-reference to Phase 7 and exit 0", async () => {
-    const list = await runCli(["template", "list"]);
-    expect(list.exitCode).toBe(0);
-    expect(list.stdout + list.stderr).toContain("Phase 7");
-
-    const update = await runCli(["template", "update"]);
-    expect(update.exitCode).toBe(0);
-    expect(update.stdout + update.stderr).toContain("Phase 7");
   });
 
   it("plugins lists the built-in next and better-auth plugins", async () => {
@@ -435,5 +427,98 @@ describe("shell CLI (e2e)", () => {
     expect(packageJson.dependencies["@better-auth/prisma-adapter"]).toBeDefined();
     expect(packageJson.dependencies["better-sqlite3"]).toBeUndefined();
     expect(packageJson.scripts.build).toBe("next build --webpack");
+  });
+});
+
+describe("shell template (e2e, real local HTTP registry)", () => {
+  let server: TestRegistryServer;
+
+  beforeAll(async () => {
+    server = await startTestRegistryServer();
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("lists templates from the registry with no cached/active info before anything is installed", async () => {
+    const result = await runCli(["template", "list", "--registry-url", server.url]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("widget");
+    expect(result.stdout).toContain("Widget");
+    expect(result.stdout).toContain("v1.1.0");
+    expect(result.stdout).not.toContain("cached:");
+  });
+
+  it("rollback can install and activate an explicit version directly", async () => {
+    const result = await runCli([
+      "template",
+      "rollback",
+      "widget",
+      "1.0.0",
+      "--registry-url",
+      server.url,
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("rolled back to v1.0.0");
+  });
+
+  it("update fetches and activates the latest version when the active one is out of date", async () => {
+    const result = await runCli(["template", "update", "widget", "--registry-url", server.url]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("updated to v1.1.0");
+  });
+
+  it("list now shows the active cached version with no update pending", async () => {
+    const result = await runCli(["template", "list", "--registry-url", server.url]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("cached: v1.1.0");
+    expect(result.stdout).not.toContain("update available");
+  });
+
+  it("update is a no-op when the active version is already latest", async () => {
+    const result = await runCli(["template", "update", "widget", "--registry-url", server.url]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("already up to date");
+  });
+
+  it("rollback with no version reverts to the previously cached version without a network call", async () => {
+    const result = await runCli(["template", "rollback", "widget", "--registry-url", server.url]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("rolled back to v1.0.0");
+  });
+
+  it("rejects updating an id that isn't published in the registry", async () => {
+    const result = await runCli([
+      "template",
+      "update",
+      "not-a-real-template",
+      "--registry-url",
+      server.url,
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("isn't published");
+  });
+
+  it("rollback rejects a version whose served files don't match the declared checksum", async () => {
+    const result = await runCli([
+      "template",
+      "rollback",
+      "widget",
+      "9.9.9",
+      "--registry-url",
+      server.url,
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("Checksum mismatch");
+  });
+
+  it("cache clear removes the cached templates too", async () => {
+    const clearResult = await runCli(["cache", "clear"]);
+    expect(clearResult.exitCode).toBe(0);
+
+    const listResult = await runCli(["template", "list", "--registry-url", server.url]);
+    expect(listResult.exitCode).toBe(0);
+    expect(listResult.stdout).not.toContain("cached:");
   });
 });

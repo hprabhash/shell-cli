@@ -14,6 +14,10 @@ export default tseslint.config(
       "packages/*/tsup.config.ts",
       // Template content describes a *generated* project's source — not ours to lint.
       "packages/*/templates/**",
+      // Published registry content — same reasoning, plus it's served raw, not built.
+      "registry/**",
+      // One-off content-publishing tooling, not part of any package's tsconfig project.
+      "scripts/**",
     ],
   },
   js.configs.recommended,

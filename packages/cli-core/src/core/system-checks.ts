@@ -9,6 +9,7 @@ import {
 } from "@shell-cli/shared";
 
 import { realCommandRunner } from "./command-runner";
+import { loadConfig } from "./config-store";
 import { detectAllPackageManagers } from "./package-manager";
 import { getConfigDir } from "./paths";
 
@@ -113,13 +114,41 @@ export async function checkNetwork(): Promise<CheckResult> {
   }
 }
 
+export async function checkRegistry(
+  registryUrl: string = loadConfig().registryUrl,
+): Promise<CheckResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 2000);
+  try {
+    const response = await fetch(registryUrl, { signal: controller.signal });
+    return {
+      id: "registry",
+      label: "Template registry reachable",
+      status: response.ok ? "pass" : "warn",
+      message: response.ok ? "OK" : `Responded with HTTP ${response.status}`,
+    };
+  } catch {
+    return {
+      id: "registry",
+      label: "Template registry reachable",
+      status: "warn",
+      message: `Could not reach ${registryUrl} (offline — cached templates will still work).`,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function runAllChecks(
   runner: CommandRunner = realCommandRunner,
 ): Promise<CheckResult[]> {
-  const [git, packageManagers, network] = await Promise.all([
+  const [git, packageManagers, network, registry] = await Promise.all([
     checkGit(runner),
     checkPackageManagers(runner),
     checkNetwork(),
+    checkRegistry(),
   ]);
-  return [checkNodeVersion(), git, packageManagers, checkHomeDirWritable(), network];
+  return [checkNodeVersion(), git, packageManagers, checkHomeDirWritable(), network, registry];
 }

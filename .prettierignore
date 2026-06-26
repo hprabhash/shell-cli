@@ -1,4 +1,7 @@
 # Template content describes a *generated* project's source, in a templating
 # syntax (.hbs) Prettier doesn't understand — never format it as our own code.
 packages/*/templates/**
+# Published registry content — checksummed at publish time; reformatting
+# would change file bytes and invalidate every manifest.json checksum.
+registry/**
 pnpm-lock.yaml

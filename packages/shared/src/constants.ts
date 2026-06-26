@@ -9,7 +9,16 @@ export const MIN_NODE_MAJOR_VERSION = 20;
 
 export const NPM_REGISTRY_BASE_URL = "https://registry.npmjs.org";
 
-/** Placeholder — the real template registry is built in Phase 7. Not a working endpoint yet. */
-export const DEFAULT_REGISTRY_URL = "https://registry.shell-cli.dev/templates.json";
+/**
+ * The real registry manifest, served straight out of this repo's own `registry/`
+ * directory via raw.githubusercontent.com. Every other registry resource (a
+ * template version's manifest, its files) is resolved as a relative URL against
+ * this one — see `core/registry-client.ts`.
+ */
+export const DEFAULT_REGISTRY_URL =
+  "https://raw.githubusercontent.com/hprabhash/shell-cli/main/registry/templates.json";
+
+export const TEMPLATES_CACHE_SUBDIR_NAME = "templates";
+export const REGISTRY_MANIFEST_CACHE_FILE_NAME = "registry-manifest.json";
 
 export const SUPPORTED_PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "bun"] as const;

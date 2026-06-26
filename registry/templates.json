@@ -1,0 +1,13 @@
+{
+  "templates": [
+    {
+      "id": "next-app",
+      "name": "Next.js 16 (App Router)",
+      "description": "Next.js 16, App Router, TypeScript, Tailwind v4.",
+      "latest": "1.0.0",
+      "versions": [
+        "1.0.0"
+      ]
+    }
+  ]
+}

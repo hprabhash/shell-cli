@@ -11,6 +11,7 @@ import {
   checkNetwork,
   checkNodeVersion,
   checkPackageManagers,
+  checkRegistry,
 } from "../../src/core/system-checks";
 
 function fakeRunner(
@@ -103,5 +104,21 @@ describe("checkNetwork", () => {
   it("warns when the registry is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     expect((await checkNetwork()).status).toBe("warn");
+  });
+});
+
+describe("checkRegistry", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("passes when the template registry responds ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    expect((await checkRegistry("https://example.com/templates.json")).status).toBe("pass");
+  });
+
+  it("warns when the template registry is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    expect((await checkRegistry("https://example.com/templates.json")).status).toBe("warn");
   });
 });

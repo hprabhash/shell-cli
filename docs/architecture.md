@@ -13,7 +13,7 @@ exists, why it's structured that way, and what's intentionally deferred.
 | 4   | Next.js plugin (real `shell create` generation)      | ✅ Done    |
 | 5   | Better Auth plugin                                   | ✅ Done    |
 | 6   | Prisma / Drizzle / PostgreSQL plugins                | ✅ Done    |
-| 7   | Template registry (remote, versioned, cached)        | ⏳ Planned |
+| 7   | Template registry (remote, versioned, cached)        | ✅ Done    |
 | 8   | Update mechanism                                     | ⏳ Planned |
 | 9   | Testing & CI/CD pipeline                             | ⏳ Planned |
 
@@ -65,8 +65,8 @@ Stored as JSON at `~/.shell-cli/config.json` (path resolution in `core/paths.ts`
 validated against a zod schema (`shared/src/schemas/config.schema.ts`) on every read.
 Fields: `packageManager`, `preferredDatabase`, `telemetry` (defaults to `false` —
 there is no telemetry collection implemented yet, so defaulting it "on" would
-misrepresent what the tool does), `registryUrl` (placeholder URL for the Phase 7
-template registry; not a working endpoint today), `cacheDir`.
+misrepresent what the tool does), `registryUrl` (the real template registry as
+of Phase 7 — see below), `cacheDir`.
 
 ### Commands and what's real
 
@@ -78,7 +78,7 @@ template registry; not a working endpoint today), `cacheDir`.
 | `shell update`                         | Fully real check-and-advise (registry lookup + semver compare); does not self-execute a global install.  |
 | `shell plugins`                        | Real as of Phase 2 — see below.                                                                          |
 | `shell config get/set/list/path/reset` | Fully real, schema-validated.                                                                            |
-| `shell template list/update`           | Stub — honest "lands in Phase 7" message, exit 0.                                                        |
+| `shell template list/update/rollback`  | Real as of Phase 7 — see below.                                                                          |
 | `shell cache clear`                    | Fully real — clears `~/.shell-cli/cache`.                                                                |
 | `shell help`                           | Free via `commander`.                                                                                    |
 
@@ -559,3 +559,160 @@ flag validation (rejecting `--database` without `--orm`, defaulting under
 combinations — Prisma+Postgres, Drizzle+Postgres, and the no-ORM SQLite
 default — through a genuine `pnpm install` + `pnpm run build` + `pnpm run
 lint`, all green, after the five fixes above.
+
+## Phase 7 — Remote Template Registry
+
+`shell template list`/`update` were Phase-1 stubs; `registryUrl`/`cacheDir`
+existed in the config schema but `DEFAULT_REGISTRY_URL` was an explicitly
+documented placeholder. This phase makes the registry real: versioned,
+checksummed, cacheable, and rollback-capable.
+
+### Hosting decision
+
+This repo is now pushed to GitHub (`https://github.com/hprabhash/shell-cli`,
+`main`). No `gh` CLI or GitHub token is available in this environment — only
+plain git push access — so the registry avoids anything needing the GitHub
+API or Releases. Registry content (a manifest + versioned template files)
+lives directly in this repo under `registry/`, served read-only via
+`raw.githubusercontent.com`. `DEFAULT_REGISTRY_URL` now points at
+`https://raw.githubusercontent.com/hprabhash/shell-cli/main/registry/templates.json`.
+No new runtime dependency was needed (no `tar`/zip library): each template
+version is a manifest of relative file paths + sha256 checksums, and the
+client downloads each file individually via a raw URL — the same way
+`getLatestPublishedVersion` (Phase 1) already calls `fetch` directly with no
+HTTP-library abstraction.
+
+### Scope boundary (deliberate)
+
+This phase does not wire the registry into `plugin-next`'s `generate()` —
+that plugin keeps using its bundled `templates/next-app/`. The registry is a
+separate, independently-real subsystem (fetch/cache/version/rollback),
+proven against real content (a copy of the same `next-app` template,
+published as the registry's first entry) but not yet consumed by the
+generation pipeline. Wiring a plugin to _prefer_ a registry-cached template
+over its bundled copy is natural future work, not required for "the
+registry is real."
+
+### Registry content layout
+
+```
+registry/
+  templates.json                          # top-level manifest
+  templates/
+    next-app/
+      1.0.0/
+        manifest.json                     # { "files": { "<relPath>": "<sha256 hex>" } }
+        files/                            # mirrors plugin-next/templates/next-app/ exactly
+```
+
+Every resource besides the manifest itself is resolved as a **relative URL
+against `registryUrl`** via Node's native `URL` class (e.g.
+`new URL("templates/next-app/1.0.0/manifest.json", registryUrl)`) — no
+separate "registry base URL" config field needed.
+`scripts/publish-registry-template.mjs` is a small one-off publishing
+script (not part of the shipped CLI package) that walks a source directory,
+computes sha256 per file, and writes/updates the manifest + version
+directory — real, reusable tooling for adding future templates. Both
+`registry/**` and `scripts/**` are excluded from ESLint/Prettier (the
+former is checksummed, externally-served content; reformatting it would
+silently invalidate every checksum — the latter is a plain-JS script outside
+any package's tsconfig project).
+
+### `packages/shared` additions
+
+`src/schemas/registry.schema.ts`: zod schemas for the top-level manifest
+(`registryManifestSchema`/`registryTemplateEntrySchema`) and a template
+version's file-checksum map (`templateVersionManifestSchema`, keys are
+relative paths, values are validated as 64-char lowercase sha256 hex).
+`src/constants.ts` gained `TEMPLATES_CACHE_SUBDIR_NAME` and
+`REGISTRY_MANIFEST_CACHE_FILE_NAME` alongside the updated
+`DEFAULT_REGISTRY_URL`.
+
+### `packages/cli-core/src/core/registry-client.ts`
+
+Mirrors the existing `utils/version.ts` fetch pattern (`AbortController` +
+5s timeout, `response.ok` check, zod-validated JSON parse, failures wrapped
+in `NetworkError`) — no new HTTP dependency. `downloadTemplateVersionToDir`
+fetches a version's manifest, then for each `{relPath, sha256}` entry:
+rejects any path containing `..` segments or resolving outside the
+destination directory (defensive — the manifest is network-sourced input),
+downloads the raw file, and verifies its sha256 (`crypto.createHash`)
+_before_ writing it to disk. Throws on the first failure; the caller is
+responsible for using a disposable temp directory so a partial failure
+never touches already-active content.
+
+### `packages/cli-core/src/core/template-cache.ts`
+
+Owns the on-disk cache layout under `<cacheDir>/templates/<id>/`: a
+`state.json` (`{active, cached}`) plus one directory per cached version.
+`installVersion` downloads into a sibling temp directory and only
+`fs.renameSync`s it into place — and updates `state.json` — once the
+download fully succeeds; any failure cleans up the temp directory and
+leaves the previous state completely untouched (proven in the integration
+test via a deliberately-corrupted fixture version). `activateVersion` just
+flips `state.json`'s `active` pointer to an already-cached version — no
+network call, which is what makes rollback instant.
+`findPreviousCachedVersion` (via `semver`) picks the highest cached version
+strictly below the current active one, for the no-argument rollback case.
+A separate small cache (`registry-manifest.json`) holds the last
+successfully fetched top-level manifest, for the offline-fallback path
+below.
+
+### `commands/template.ts` (rewritten) and `shell doctor`
+
+Each subcommand takes its own `--registry-url <url>` override (mirroring
+`create.ts`'s per-flag override style rather than fighting Commander's
+parent-option inheritance for three commands).
+
+- **`list`**: fetches the manifest live; on failure, falls back to the
+  cached copy with an "offline — showing cached data" notice — the same
+  philosophy as `checkNetwork()`'s "offline, cached data still works" from
+  Phase 1. Shows each template's cached/active version and whether an
+  update is available.
+- **`update [id]`**: no `id` updates every manifest entry to `latest`; one
+  failure warns and continues rather than aborting the rest (same
+  try/catch-per-item shape as `create.ts`'s `runPostInstallAll`).
+- **`rollback <id> [version]`**: with an explicit version, installs it
+  (no-op if already cached) and activates it — this is also how you
+  "upgrade" to a specific non-latest version. Without one, activates the
+  next-lower cached version; errors clearly if there isn't one.
+
+`checkRegistry()` (new, in `system-checks.ts`, same shape as `checkNetwork()`
+— `warn` not `fail` on unreachability) is now part of `runAllChecks()`, so
+`shell doctor` reports template-registry reachability alongside everything
+else.
+
+The Phase-1 `notImplementedYet()` stub helper (`commands/_shared.ts`) had no
+remaining callers once `template.ts` became real — deleted rather than left
+as dead code.
+
+### Verification
+
+**Unit**: registry schemas (valid/invalid manifests and checksums),
+`template-cache.ts`'s state read/write/activate/rollback-candidate-selection
+logic against a temp cache dir (no network), `checkRegistry()` with a
+stubbed global `fetch` (same pattern as the existing `checkNetwork()` test).
+
+**Integration**: a real `node:http` server (`tests/fixtures/test-registry-server.ts`,
+shared with the e2e suite) serves a fixture registry — one template
+("widget", versions 1.0.0/1.1.0) plus a version whose served files
+deliberately don't match their declared checksum. Against this real server
+(not a mocked `fetch`): fetch+validate the manifest, install+activate a
+version and verify the exact file content landed on disk, install a second
+version without disturbing which one is active, roll back with the server
+_closed_ (proving no network call), and confirm a checksum-mismatched
+version is fully rejected — no version directory, no leftover temp
+directory, and the previously-active version's files are byte-for-byte
+unchanged.
+
+**e2e**: the built CLI's `template list/update/rollback` driven against the
+same fixture server via `--registry-url`, covering the full realistic
+sequence (list with nothing cached → explicit-version rollback → update to
+latest → list shows no pending update → no-op update → no-argument rollback
+→ rejecting an unknown id → rejecting a bad checksum → `cache clear` wiping
+the template cache too).
+
+**Manual**: after pushing `registry/`'s real content, `shell template
+list`/`update`/`rollback` were run against the live
+`raw.githubusercontent.com` URL — the same "don't trust file-existence
+checks alone" discipline every prior phase used.

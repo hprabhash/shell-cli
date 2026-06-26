@@ -1,0 +1,14 @@
+{
+  "files": {
+    ".gitignore": "cfdbd5a321f3ba279e434c025fc9a44bf2d3bd3a1af5affb8429d79bd18af054",
+    "app/globals.css": "94d307fb925a3264dd331975b5e17170b1d887f361669cf839bdf37cc7a40db8",
+    "app/layout.tsx.hbs": "0505d67b52bd34fb5eefb33302e20f6057bb8ed8411469fd167cf23783c64688",
+    "app/page.tsx.hbs": "1ca138b7be40b27766b593ab5baf70ae4d0800daff6d4e48f24751a53d76afb3",
+    "eslint.config.mjs": "275a07c13fc7c83a652efcfa9fb6a207c451a2f5088e6793415ce44281285720",
+    "next.config.ts": "a972c4f0ffa6dd714e7909b02d1ac19d2f2fe3d01f191efd2c5054bd6f142ec1",
+    "package.json.hbs": "64962e1427d35cdaa3cdbdc096dc08fbb2961e1011f38cb6a6e5656edb6f03ec",
+    "postcss.config.mjs": "7b299d3d3b16699ddda397c0b2373b3af4f25f8fc9ccc9b3d9e64ef083bc1c21",
+    "README.md.hbs": "e4ccd920660d487d64b75b376c8d5bec8b6eace3e96aa5a499eda09df93170e7",
+    "tsconfig.json": "fbff01604d6cb54694be707f26e7a0eb21a6ef796b888c6a1dab1839fa7c6ccc"
+  }
+}
