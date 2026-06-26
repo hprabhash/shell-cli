@@ -920,3 +920,20 @@ drives `shell doctor`'s own check), `cli-core`'s published `engines.node`
 workspace's → `>=22.22.1` (what contributing to this repo needs), both
 workflows' `node-version` → `22`. Re-verified the same way: pushed again,
 polled the Actions API, confirmed `ci.yml` actually went green this time.
+
+### Known remaining gap: `release.yml` can't open its PR yet
+
+After the Node fix, `ci.yml` passed for real. `release.yml` still fails —
+but differently now: `pnpm install`/build succeed, and `changesets/action`
+gets far enough to create a `changeset-release/main` branch with the
+version-bump commit, but fails to open the actual pull request from it.
+This is the textbook symptom of a GitHub repository setting that defaults
+to _off_ on newly created repos: **Settings → Actions → General → Workflow
+permissions → "Allow GitHub Actions to create and approve pull
+requests."** Without it, the default `GITHUB_TOKEN` can push a branch
+(`contents: write` covers that) but not open a PR from it, regardless of
+the `pull-requests: write` permission already granted in the workflow
+file. This needs the repository owner to flip that one setting — not
+something a workflow or `GITHUB_TOKEN` can grant itself. Once it's on,
+the next push to `main` (or re-running this same workflow) should open
+the Version Packages PR successfully with no other changes needed.
