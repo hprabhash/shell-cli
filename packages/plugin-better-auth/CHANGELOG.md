@@ -1,5 +1,12 @@
 # @hprabhash/plugin-better-auth
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [9e9e5c2]
+  - @hprabhash/template-engine@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
