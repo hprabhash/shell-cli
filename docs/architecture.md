@@ -991,3 +991,25 @@ interactive confirm prompt with no TTY behind it), since which specific
 non-interactive outcome that hits (`NetworkError`, "already on the latest
 version", or a declined update) legitimately depends on real registry
 state at test time.
+
+### A real bug only the published package could expose: `npm publish` strips `.gitignore`
+
+The first real-world `shell create` against the actually-published package
+failed every ORM that patches `.gitignore` (Prisma, Drizzle) with
+`ENOENT: ... .gitignore` — the Next.js template's own `.gitignore` was
+missing from the generated project entirely. Every local test passed
+because tests render `packages/plugin-next/templates/next-app/` directly off
+the filesystem; nothing in the suite renders from a packed-and-republished
+tarball. Confirmed with a real `npm pack @hprabhash/plugin-next` against the
+live registry: the tarball's `templates/next-app/` had 9 files, not 10 —
+`.gitignore` wasn't one of them.
+
+This is an npm packing behavior, not a bug in our code: `npm publish`/`npm
+pack` treats any file named `.gitignore` as packing-control input (the same
+role `.npmignore` plays) and excludes it from the tarball, regardless of how
+deeply it's nested or that it was meant as copy-verbatim template content,
+not a rule file for packing template-engine itself. Fixed the way other
+npm-published scaffolding tools handle this: the template ships the dotless
+`gitignore`, and `render-tree.ts`'s `restoreDotfileName` adds the leading dot
+back when writing the file into the generated project — `_partials`-style
+output-path massaging, not a new mechanism.

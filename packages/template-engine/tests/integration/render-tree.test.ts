@@ -57,6 +57,16 @@ describe("renderTemplateTree", () => {
     expect(result.filesWritten).toHaveLength(3);
   });
 
+  it("writes a dotless `gitignore` source file as `.gitignore` in the output", async () => {
+    fs.writeFileSync(path.join(templateDir, "gitignore"), "node_modules\n");
+
+    const targetDir = path.join(parentDir, "target-gitignore");
+    await renderTemplateTree(templateDir, targetDir, { projectName: "my-app" });
+
+    expect(fs.readFileSync(path.join(targetDir, ".gitignore"), "utf-8")).toBe("node_modules\n");
+    expect(fs.existsSync(path.join(targetDir, "gitignore"))).toBe(false);
+  });
+
   it("rolls back a freshly-created target directory if rendering fails partway through", async () => {
     fs.writeFileSync(path.join(templateDir, "src", "index.ts.hbs"), "{{#if}}{{/if_typo}}");
 

@@ -27,11 +27,25 @@ function walk(dir: string): string[] {
   return files;
 }
 
+/**
+ * `npm publish` treats a `.gitignore` file as packing-control input and strips
+ * it from the tarball, even when nested deep inside template content meant to
+ * be copied verbatim (confirmed against the real published `plugin-next`
+ * tarball — `templates/next-app/.gitignore` never made it in). Templates ship
+ * the dotless `gitignore` instead and this restores the dot on output, the
+ * same workaround used by other npm-published scaffolding tools.
+ */
+function restoreDotfileName(relativePath: string): string {
+  const { dir, base } = path.parse(relativePath);
+  return base === "gitignore" ? path.join(dir, ".gitignore") : relativePath;
+}
+
 function destRelativePath(templateRootDir: string, sourceFile: string): string {
   const relative = path.relative(templateRootDir, sourceFile);
-  return sourceFile.endsWith(TEMPLATE_EXTENSION)
+  const stripped = sourceFile.endsWith(TEMPLATE_EXTENSION)
     ? relative.slice(0, -TEMPLATE_EXTENSION.length)
     : relative;
+  return restoreDotfileName(stripped);
 }
 
 export interface RenderTreeResult {
