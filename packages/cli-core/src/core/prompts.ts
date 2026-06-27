@@ -39,6 +39,8 @@ export interface SelectOption<T extends string> {
   value: T;
   label: string;
   hint?: string | undefined;
+  /** Visible but not selectable — clack rejects Enter on it. Used for roadmap items that aren't built yet. */
+  disabled?: boolean | undefined;
 }
 
 // `clack.Option<T>` is a conditional type keyed on a generic `T`, which TypeScript can't
@@ -49,6 +51,7 @@ function toClackOptions<T extends string>(options: SelectOption<T>[]): clack.Opt
     value: option.value,
     label: option.label,
     ...(option.hint !== undefined && { hint: option.hint }),
+    ...(option.disabled !== undefined && { disabled: option.disabled }),
   })) as clack.Option<T>[];
 }
 

@@ -7,6 +7,7 @@ import {
   type FrameworkId,
   type PackageManager,
   type Plugin,
+  type PluginCategory,
   type ProjectPlan,
 } from "@hprabhash/shared";
 import type { Command } from "commander";
@@ -18,7 +19,15 @@ import { runInstall } from "../core/install-dependencies";
 import { logger } from "../core/logger";
 import { detectAllPackageManagers, pickPreferredPackageManager } from "../core/package-manager";
 import { findPluginById, getPluginMetadata, getPluginsByCategory } from "../core/plugin-registry";
-import { intro, outro, promptConfirm, promptSelect, promptText } from "../core/prompts";
+import {
+  intro,
+  note,
+  outro,
+  promptConfirm,
+  promptSelect,
+  promptText,
+  type SelectOption,
+} from "../core/prompts";
 import { runPluginQuestions } from "../core/run-plugin-questions";
 import {
   assertValidProjectName,
@@ -29,6 +38,22 @@ import {
 const NONE_AUTH_VALUE = "none";
 const NONE_ORM_VALUE = "none";
 const NONE_DATABASE_VALUE = "none";
+
+/**
+ * Roadmap items with no plugin behind them yet — shown disabled so users can see
+ * what's planned without being able to select something that would silently do
+ * nothing. Add to these lists as more get planned; remove an entry once its real
+ * plugin lands in `plugin-registry.ts`.
+ */
+const FRAMEWORK_COMING_SOON: readonly SelectOption<string>[] = [
+  { value: "react", label: "React", hint: "Coming soon", disabled: true },
+  { value: "vue", label: "Vue", hint: "Coming soon", disabled: true },
+  { value: "nuxt", label: "Nuxt", hint: "Coming soon", disabled: true },
+];
+
+const DATABASE_COMING_SOON: readonly SelectOption<string>[] = [
+  { value: "mysql", label: "MySQL", hint: "Coming soon", disabled: true },
+];
 
 interface CreateCommandOptions {
   yes?: boolean;
@@ -153,11 +178,14 @@ async function resolveFramework(command: Command, yes: boolean): Promise<Framewo
 
   const selected = await promptSelect({
     message: "Framework:",
-    options: choices.map((metadata) => ({
-      value: metadata.id,
-      label: metadata.name,
-      hint: metadata.description,
-    })),
+    options: [
+      ...choices.map((metadata) => ({
+        value: metadata.id,
+        label: metadata.name,
+        hint: metadata.description,
+      })),
+      ...FRAMEWORK_COMING_SOON,
+    ],
   });
   return assertRegisteredFramework(selected);
 }
@@ -233,11 +261,14 @@ async function resolveDatabase(
 
   const selected = await promptSelect({
     message: "Database:",
-    options: choices.map((metadata) => ({
-      value: metadata.id,
-      label: metadata.name,
-      hint: metadata.description,
-    })),
+    options: [
+      ...choices.map((metadata) => ({
+        value: metadata.id,
+        label: metadata.name,
+        hint: metadata.description,
+      })),
+      ...DATABASE_COMING_SOON,
+    ],
   });
   return assertRegisteredDatabase(selected);
 }
@@ -309,6 +340,29 @@ async function resolveAuthFeatures(
   return Array.isArray(features) ? features.map(String) : [];
 }
 
+/** Flattens every option label across a plugin's questions — generic over any plugin's select/multiselect, not Better-Auth-specific. */
+function buildOptionLabelMap(plugin: Plugin): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const question of plugin.questions()) {
+    if (question.type === "select" || question.type === "multiselect") {
+      for (const option of question.options) {
+        labels.set(option.value, option.label);
+      }
+    }
+  }
+  return labels;
+}
+
+/** Shown immediately after the feature picker closes, not buried at the end of the whole flow. */
+function displaySelectedFeatures(plugin: Plugin, featureIds: readonly string[]): void {
+  if (featureIds.length === 0) {
+    return;
+  }
+  const labels = buildOptionLabelMap(plugin);
+  const lines = featureIds.map((id) => `  ${colors.green("✔")} ${labels.get(id) ?? id}`);
+  note(lines.join("\n"), `${getPluginMetadata(plugin).name} features`);
+}
+
 async function resolvePackageManager(command: Command, yes: boolean): Promise<PackageManager> {
   const opts = command.opts<CreateCommandOptions>();
   if (opts.pm !== undefined) {
@@ -357,22 +411,65 @@ async function resolveInstall(command: Command, yes: boolean): Promise<boolean> 
   return promptConfirm({ message: "Install dependencies?", initialValue: true });
 }
 
-function printPlanSummary(plan: ProjectPlan): void {
-  logger.info("");
-  logger.info(colors.bold("Resolved project plan:"));
-  logger.info(`  Project name:          ${plan.projectName}`);
-  logger.info(`  Target directory:      ${plan.targetDir}`);
-  logger.info(`  Framework:             ${plan.framework}`);
-  logger.info(`  ORM:                   ${plan.orm ?? "none"}`);
-  logger.info(`  Database:              ${plan.database ?? "none"}`);
-  logger.info(`  Authentication:        ${plan.auth ?? "none"}`);
-  if (plan.authFeatures.length > 0) {
-    logger.info(`    Features:            ${plan.authFeatures.join(", ")}`);
+/** Falls back to the raw id if the plugin can't be found — should only happen for "none". */
+function pluginDisplayName(id: string | null, category: PluginCategory): string {
+  if (id === null) {
+    return "None";
   }
-  logger.info(`  Package manager:       ${plan.packageManager}`);
-  logger.info(`  Initialize git:        ${plan.initGit ? "yes" : "no"}`);
-  logger.info(`  Install dependencies:  ${plan.installDependencies ? "yes" : "no"}`);
+  const plugin = findPluginById(id, getPluginsByCategory(category));
+  return plugin ? getPluginMetadata(plugin).name : id;
+}
+
+function buildStackSummary(plan: ProjectPlan, authPlugin: Plugin | undefined): string {
+  const rows: [string, string][] = [
+    ["Project", plan.projectName],
+    ["Directory", plan.targetDir],
+    ["Framework", pluginDisplayName(plan.framework, "framework")],
+    ["ORM", pluginDisplayName(plan.orm, "orm")],
+    ["Database", pluginDisplayName(plan.database, "database")],
+    ["Authentication", pluginDisplayName(plan.auth, "auth")],
+  ];
+
+  if (authPlugin && plan.authFeatures.length > 0) {
+    const labels = buildOptionLabelMap(authPlugin);
+    rows.push(["Features", plan.authFeatures.map((id) => labels.get(id) ?? id).join(", ")]);
+  }
+
+  rows.push(
+    ["Package manager", plan.packageManager],
+    ["Initialize git", plan.initGit ? "Yes" : "No"],
+    ["Install deps", plan.installDependencies ? "Yes" : "No"],
+  );
+
+  const labelWidth = Math.max(...rows.map(([label]) => label.length));
+  return rows
+    .map(([label, value]) => `${colors.dim(label.padEnd(labelWidth))}  ${colors.bold(value)}`)
+    .join("\n");
+}
+
+/**
+ * The last checkpoint before any file is written. The summary itself always prints
+ * (scripted/`--yes` runs still benefit from seeing what was resolved); only the
+ * confirm question is skipped under `--yes` — that flag means "don't prompt", and a
+ * confirm here would just hang in a non-TTY.
+ */
+async function confirmStackSummary(
+  plan: ProjectPlan,
+  authPlugin: Plugin | undefined,
+  yes: boolean,
+): Promise<void> {
   logger.debug(JSON.stringify(plan, null, 2));
+  note(buildStackSummary(plan, authPlugin), "Review your stack");
+  if (yes) {
+    return;
+  }
+  const proceed = await promptConfirm({
+    message: "Create the project with this setup?",
+    initialValue: true,
+  });
+  if (!proceed) {
+    throw new UserCancelledError("Aborted before creating the project.");
+  }
 }
 
 async function generateAll(
@@ -493,7 +590,24 @@ export function registerCreateCommand(program: Command): void {
       const framework = await resolveFramework(createCommand, yes);
       const ormPluginId = await resolveOrm(createCommand, yes);
       const databasePluginId = await resolveDatabase(createCommand, yes, ormPluginId !== null);
+
+      // Resolved and shown right after the auth plugin itself is chosen, not deferred
+      // to the end of the whole prompt flow — the feature picker is a direct
+      // continuation of "which auth plugin", not a separate, later decision.
       const authPluginId = await resolveAuth(createCommand, yes);
+      let authPlugin: Plugin | undefined;
+      let authFeatures: string[] = [];
+      if (authPluginId !== null) {
+        authPlugin = findPluginById(authPluginId, getPluginsByCategory("auth"));
+        if (!authPlugin) {
+          throw new ValidationError(`Authentication plugin "${authPluginId}" isn't registered.`);
+        }
+        authFeatures = await resolveAuthFeatures(authPlugin, createCommand, yes);
+        if (!yes) {
+          displaySelectedFeatures(authPlugin, authFeatures);
+        }
+      }
+
       const packageManager = await resolvePackageManager(createCommand, yes);
       const initGit = await resolveGit(createCommand, yes);
       const installDependencies = await resolveInstall(createCommand, yes);
@@ -530,13 +644,7 @@ export function registerCreateCommand(program: Command): void {
         selectedPlugins.push({ plugin: ormPlugin, variables: { projectName, packageManager } });
       }
 
-      let authFeatures: string[] = [];
-      if (authPluginId !== null) {
-        const authPlugin = findPluginById(authPluginId, getPluginsByCategory("auth"));
-        if (!authPlugin) {
-          throw new ValidationError(`Authentication plugin "${authPluginId}" isn't registered.`);
-        }
-        authFeatures = await resolveAuthFeatures(authPlugin, createCommand, yes);
+      if (authPlugin) {
         selectedPlugins.push({
           plugin: authPlugin,
           variables: { features: authFeatures, orm: ormPluginId },
@@ -556,7 +664,7 @@ export function registerCreateCommand(program: Command): void {
         authFeatures,
       };
 
-      printPlanSummary(plan);
+      await confirmStackSummary(plan, authPlugin, yes);
 
       await generateAll(selectedPlugins, targetDir);
       if (plan.initGit) {

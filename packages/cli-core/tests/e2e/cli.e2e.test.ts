@@ -134,7 +134,7 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Resolved project plan");
+    expect(result.stdout).toContain("Review your stack");
     expect(result.stdout).toContain("Created my-app");
 
     const packageJson = JSON.parse(
@@ -187,7 +187,7 @@ describe("shell CLI (e2e)", () => {
       "--no-install",
     ]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Framework:");
+    expect(result.stdout).toContain("Next.js 16 (App Router)");
     expect(fs.existsSync(path.join(targetDir, "package.json"))).toBe(true);
   });
 
@@ -228,7 +228,7 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Authentication:        better-auth");
+    expect(result.stdout).toContain("Better Auth");
     expect(fs.existsSync(path.join(targetDir, "lib", "auth.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "lib", "auth-client.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "app", "api", "auth", "[...all]", "route.ts"))).toBe(
@@ -273,7 +273,7 @@ describe("shell CLI (e2e)", () => {
       "--no-install",
     ]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Authentication:        none");
+    expect(result.stdout).not.toContain("Better Auth");
     expect(fs.existsSync(path.join(targetDir, "lib", "auth.ts"))).toBe(false);
   });
 
@@ -324,8 +324,8 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("ORM:                   prisma");
-    expect(result.stdout).toContain("Database:              postgresql");
+    expect(result.stdout).toContain("Prisma");
+    expect(result.stdout).toContain("PostgreSQL");
     expect(fs.existsSync(path.join(targetDir, "prisma", "schema.prisma"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "prisma.config.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "lib", "prisma.ts"))).toBe(true);
@@ -357,7 +357,7 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("ORM:                   drizzle");
+    expect(result.stdout).toContain("Drizzle");
     expect(fs.existsSync(path.join(targetDir, "drizzle.config.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "lib", "db", "index.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(true);
@@ -380,7 +380,7 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Database:              none");
+    expect(result.stdout).not.toContain("PostgreSQL");
     expect(fs.existsSync(path.join(targetDir, "drizzle.config.ts"))).toBe(true);
     expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(false);
   });
@@ -398,8 +398,9 @@ describe("shell CLI (e2e)", () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("ORM:                   none");
-    expect(result.stdout).toContain("Database:              none");
+    expect(result.stdout).not.toContain("Prisma");
+    expect(result.stdout).not.toContain("Drizzle");
+    expect(result.stdout).not.toContain("PostgreSQL");
     expect(fs.existsSync(path.join(targetDir, "prisma"))).toBe(false);
     expect(fs.existsSync(path.join(targetDir, "docker-compose.yml"))).toBe(false);
   });

@@ -47,9 +47,11 @@ With no flags, this walks you through an interactive prompt flow:
 7. **Initialize git?** (yes/no)
 8. **Install dependencies?** (yes/no)
 
-It then prints the resolved plan, scaffolds the project, runs `git init` and
-the package manager install if requested, runs each plugin's post-install
-step (e.g. `prisma generate`, `npx auth generate`), and prints next steps.
+It then shows a "Review your stack" summary of everything resolved above and
+asks you to confirm (skipped non-interactively) before scaffolding the
+project, running `git init` and the package manager install if requested,
+running each plugin's post-install step (e.g. `prisma generate`,
+`npx auth generate`), and printing next steps.
 
 Non-interactively, pass everything as flags plus `--yes`:
 
