@@ -3,6 +3,11 @@
 This is a living document, extended at the end of each build phase. It records what
 exists, why it's structured that way, and what's intentionally deferred.
 
+For task-oriented docs instead of design history, see
+[usage.md](usage.md) (using the CLI), [contributing.md](contributing.md)
+(developing it), [adding-templates.md](adding-templates.md) (publishing
+registry templates), and [releasing.md](releasing.md) (cutting a release).
+
 ## Roadmap
 
 | #   | Phase                                                | Status  |
