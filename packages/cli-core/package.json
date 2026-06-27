@@ -1,6 +1,6 @@
 {
   "name": "@hprabhash/shell-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Plugin-driven full-stack project generator — scaffold Next.js, Better Auth, Prisma/Drizzle, PostgreSQL, and shadcn/ui apps with one command.",
   "license": "MIT",
   "type": "module",
