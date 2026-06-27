@@ -1,5 +1,16 @@
 # @hprabhash/shell-cli
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [9e9e5c2]
+  - @hprabhash/plugin-next@0.1.2
+  - @hprabhash/plugin-better-auth@0.1.2
+  - @hprabhash/plugin-drizzle@0.1.2
+  - @hprabhash/plugin-postgres@0.1.2
+  - @hprabhash/plugin-prisma@0.1.2
+
 ## 0.2.1
 
 ### Patch Changes
