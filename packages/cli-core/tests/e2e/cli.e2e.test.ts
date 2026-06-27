@@ -63,11 +63,18 @@ describe("shell CLI (e2e)", () => {
     expect(result.stdout).toContain("Node.js version");
   });
 
-  it("update degrades gracefully when no version of this package is published yet", async () => {
+  it("update never lands on an interactive prompt in non-TTY CI", async () => {
+    // Deliberately doesn't assert *which* non-interactive outcome this hits —
+    // unpublished (NetworkError), published-and-current ("already on the
+    // latest version"), and published-and-behind-but-declined are all
+    // legitimate depending on real npm registry state at the time. What
+    // this guards against is the interactive confirm prompt: with no TTY
+    // behind it, that would hang until the test's own timeout fails it —
+    // exactly what happened once for real (see architecture.md's Phase 8
+    // section) before the package name collision that caused it was fixed.
     const result = await runCli(["update"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Current version:");
-    expect(result.stdout + result.stderr).toContain("Could not check for updates");
   });
 
   it("update --rollback fails clearly when nothing has ever been applied", async () => {
