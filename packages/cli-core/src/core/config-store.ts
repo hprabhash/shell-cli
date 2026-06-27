@@ -6,7 +6,7 @@ import {
   getDefaultConfig,
   type ShellCliConfig,
   type ShellCliConfigKey,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 
 import { getConfigDir, getConfigFilePath } from "./paths";
 

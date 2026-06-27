@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { FileSystemError } from "@shell-cli/shared";
+import { FileSystemError } from "@hprabhash/shared";
 import Handlebars from "handlebars";
 
 // A dedicated instance (not the module-level default export) so registering

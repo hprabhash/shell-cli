@@ -1,4 +1,4 @@
-# @shell-cli/shared
+# @hprabhash/shared
 
 ## 0.2.0
 

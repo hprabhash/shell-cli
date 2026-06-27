@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CommandRunner } from "@shell-cli/shared";
+import type { CommandRunner } from "@hprabhash/shared";
 
 import { runInstall } from "../../src/core/install-dependencies";
 

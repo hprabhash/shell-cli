@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { isShellCliError } from "@shell-cli/shared";
+import { isShellCliError } from "@hprabhash/shared";
 
 import { createProgram } from "./cli";
 import { colors } from "./core/colors";

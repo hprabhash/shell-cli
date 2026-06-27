@@ -1,5 +1,5 @@
 {
-  "name": "@shell-cli/plugin-better-auth",
+  "name": "@hprabhash/plugin-better-auth",
   "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,8 +22,8 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@shell-cli/shared": "workspace:*",
-    "@shell-cli/template-engine": "workspace:*",
+    "@hprabhash/shared": "workspace:*",
+    "@hprabhash/template-engine": "workspace:*",
     "execa": "^9.6.1"
   }
 }

@@ -1,4 +1,4 @@
-import { FileSystemError } from "@shell-cli/shared";
+import { FileSystemError } from "@hprabhash/shared";
 
 export interface PackageJsonFragment {
   dependencies?: Record<string, string>;

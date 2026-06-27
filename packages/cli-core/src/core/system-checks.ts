@@ -6,14 +6,14 @@ import {
   NPM_REGISTRY_BASE_URL,
   type CheckResult,
   type CommandRunner,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 
 import { realCommandRunner } from "./command-runner";
 import { loadConfig } from "./config-store";
 import { detectAllPackageManagers } from "./package-manager";
 import { getConfigDir } from "./paths";
 
-export type { CheckResult, CheckStatus } from "@shell-cli/shared";
+export type { CheckResult, CheckStatus } from "@hprabhash/shared";
 
 export function checkNodeVersion(nodeVersion: string = process.version): CheckResult {
   const major = Number(nodeVersion.replace(/^v/, "").split(".")[0]);

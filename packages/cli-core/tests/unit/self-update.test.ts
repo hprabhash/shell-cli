@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CommandRunner } from "@shell-cli/shared";
+import type { CommandRunner } from "@hprabhash/shared";
 
 import { saveConfig } from "../../src/core/config-store";
 import {

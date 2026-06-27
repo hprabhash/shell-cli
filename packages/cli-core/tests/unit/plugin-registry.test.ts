@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Plugin } from "@shell-cli/shared";
+import type { Plugin } from "@hprabhash/shared";
 
 import {
   collectPluginDoctorResults,

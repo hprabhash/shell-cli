@@ -18,13 +18,13 @@ pnpm build
 
 ```
 packages/
-  shared/              @shell-cli/shared              — errors, types, constants, zod schemas
-  template-engine/     @shell-cli/template-engine      — Handlebars rendering, rollback-safe file writes
-  plugin-next/         @shell-cli/plugin-next          — Next.js 16 framework plugin
-  plugin-better-auth/  @shell-cli/plugin-better-auth   — Better Auth, 19 selectable features
-  plugin-prisma/       @shell-cli/plugin-prisma        — Prisma ORM plugin
-  plugin-drizzle/      @shell-cli/plugin-drizzle       — Drizzle ORM plugin
-  plugin-postgres/     @shell-cli/plugin-postgres      — PostgreSQL database plugin
+  shared/              @hprabhash/shared              — errors, types, constants, zod schemas
+  template-engine/     @hprabhash/template-engine      — Handlebars rendering, rollback-safe file writes
+  plugin-next/         @hprabhash/plugin-next          — Next.js 16 framework plugin
+  plugin-better-auth/  @hprabhash/plugin-better-auth   — Better Auth, 19 selectable features
+  plugin-prisma/       @hprabhash/plugin-prisma        — Prisma ORM plugin
+  plugin-drizzle/      @hprabhash/plugin-drizzle       — Drizzle ORM plugin
+  plugin-postgres/     @hprabhash/plugin-postgres      — PostgreSQL database plugin
   cli-core/            @hprabhash/shell-cli            — the CLI itself (bin: `shell`)
 registry/                                              — remote template registry content (see adding-templates.md)
 scripts/                                                — one-off maintainer tooling (e.g. publish-registry-template.mjs)
@@ -118,7 +118,7 @@ Steps:
    `package.json`/`tsconfig.json`/`tsup.config.ts` (copy `plugin-postgres`'s
    for the simplest example, or `plugin-next`'s if you need an on-disk
    `templates/` directory + Handlebars rendering via
-   `@shell-cli/template-engine`'s `renderTemplateTree`).
+   `@hprabhash/template-engine`'s `renderTemplateTree`).
 2. Implement `index.ts` exporting a `Plugin` as the default export.
 3. **If your plugin writes into a file another plugin might also touch**
    (`package.json`, `.env`, `.gitignore`, `next.config.ts`) — use
@@ -126,7 +126,7 @@ Steps:
    (`mergePackageJsonFragment`, `mergeEnvFile`, `appendGitignoreEntries`,
    `mergeNextConfigServerExternalPackages`) instead of `writeFile()`, so you
    don't clobber what another plugin already wrote. All four live in
-   `@shell-cli/template-engine`.
+   `@hprabhash/template-engine`.
 4. Register it in `packages/cli-core/src/core/plugin-registry.ts`'s
    `BUILT_IN_PLUGINS` array.
 5. If it needs cross-plugin coordination (e.g. "what ORM did the user pick"),

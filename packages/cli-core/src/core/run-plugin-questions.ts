@@ -1,4 +1,4 @@
-import type { PluginQuestionDefinition } from "@shell-cli/shared";
+import type { PluginQuestionDefinition } from "@hprabhash/shared";
 
 import { promptConfirm, promptMultiselect, promptSelect, promptText } from "./prompts";
 

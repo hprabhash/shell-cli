@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import type { EnvFileEntry } from "@shell-cli/template-engine";
+import type { EnvFileEntry } from "@hprabhash/template-engine";
 
 import { raw, serializeObjectLiteral } from "./codegen/serialize-object";
 import type { MergedBetterAuthContribution } from "./contribution";

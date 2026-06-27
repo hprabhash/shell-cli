@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NetworkError, NPM_REGISTRY_BASE_URL } from "@shell-cli/shared";
+import { NetworkError, NPM_REGISTRY_BASE_URL } from "@hprabhash/shared";
 import semver from "semver";
 
 interface OwnPackageJson {

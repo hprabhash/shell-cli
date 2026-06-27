@@ -3,7 +3,7 @@ import {
   NetworkError,
   ValidationError,
   type RegistryManifest,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 import type { Command } from "commander";
 
 import { loadConfig } from "../core/config-store";

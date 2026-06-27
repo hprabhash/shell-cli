@@ -1,4 +1,4 @@
-# @shell-cli/plugin-next
+# @hprabhash/plugin-next
 
 ## 0.1.1
 
@@ -13,5 +13,5 @@
   unscoped `shell-cli` name is already taken on the public npm registry.
 
 - Updated dependencies [b5d05cd]
-  - @shell-cli/shared@0.2.0
-  - @shell-cli/template-engine@0.1.1
+  - @hprabhash/shared@0.2.0
+  - @hprabhash/template-engine@0.1.1

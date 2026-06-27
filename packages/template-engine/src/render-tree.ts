@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { FileSystemError } from "@shell-cli/shared";
+import { FileSystemError } from "@hprabhash/shared";
 
 import { registerPartialsDir, renderFile } from "./engine";
 import { ProjectWriter } from "./project-writer";

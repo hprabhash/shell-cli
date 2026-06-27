@@ -1,4 +1,4 @@
-import { CONFIG_KEYS, ValidationError, type ShellCliConfigKey } from "@shell-cli/shared";
+import { CONFIG_KEYS, ValidationError, type ShellCliConfigKey } from "@hprabhash/shared";
 import type { Command } from "commander";
 
 import { getConfigValue, loadConfig, resetConfig, setConfigValue } from "../core/config-store";

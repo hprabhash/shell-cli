@@ -7,8 +7,8 @@ import type {
   PluginGenerateContext,
   PluginMetadata,
   PluginPostInstallContext,
-} from "@shell-cli/shared";
-import { ProjectWriter, mergePackageJsonFragment } from "@shell-cli/template-engine";
+} from "@hprabhash/shared";
+import { ProjectWriter, mergePackageJsonFragment } from "@hprabhash/template-engine";
 import { execa } from "execa";
 
 const metadata: PluginMetadata = {

@@ -9,7 +9,7 @@ import {
   templateVersionManifestSchema,
   type RegistryManifest,
   type TemplateVersionManifest,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 
 const FETCH_TIMEOUT_MS = 5000;
 

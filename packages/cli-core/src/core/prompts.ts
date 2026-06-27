@@ -1,6 +1,6 @@
 import * as clack from "@clack/prompts";
 
-import { UserCancelledError } from "@shell-cli/shared";
+import { UserCancelledError } from "@hprabhash/shared";
 
 /**
  * `@clack/prompts` signals cancellation (Ctrl+C) by resolving with a special symbol

@@ -11,16 +11,16 @@ it's built this way (including the real publishability bug that shaped it).
 | package                       | npm name                        | what it is                                 |
 | ----------------------------- | ------------------------------- | ------------------------------------------ |
 | `packages/cli-core`           | `@hprabhash/shell-cli`          | the CLI itself (bin: `shell`)              |
-| `packages/shared`             | `@shell-cli/shared`             | errors, types, constants, schemas          |
-| `packages/template-engine`    | `@shell-cli/template-engine`    | Handlebars rendering, rollback-safe writes |
-| `packages/plugin-next`        | `@shell-cli/plugin-next`        | Next.js framework plugin                   |
-| `packages/plugin-better-auth` | `@shell-cli/plugin-better-auth` | Better Auth plugin                         |
-| `packages/plugin-prisma`      | `@shell-cli/plugin-prisma`      | Prisma ORM plugin                          |
-| `packages/plugin-drizzle`     | `@shell-cli/plugin-drizzle`     | Drizzle ORM plugin                         |
-| `packages/plugin-postgres`    | `@shell-cli/plugin-postgres`    | PostgreSQL database plugin                 |
+| `packages/shared`             | `@hprabhash/shared`             | errors, types, constants, schemas          |
+| `packages/template-engine`    | `@hprabhash/template-engine`    | Handlebars rendering, rollback-safe writes |
+| `packages/plugin-next`        | `@hprabhash/plugin-next`        | Next.js framework plugin                   |
+| `packages/plugin-better-auth` | `@hprabhash/plugin-better-auth` | Better Auth plugin                         |
+| `packages/plugin-prisma`      | `@hprabhash/plugin-prisma`      | Prisma ORM plugin                          |
+| `packages/plugin-drizzle`     | `@hprabhash/plugin-drizzle`     | Drizzle ORM plugin                         |
+| `packages/plugin-postgres`    | `@hprabhash/plugin-postgres`    | PostgreSQL database plugin                 |
 
-All 8 are publicly publishable (`publishConfig.access: "public"`). None are
-published yet — see [Current status](#current-status-nothing-published-yet)
+All 8 are publicly publishable (`publishConfig.access: "public"`), all under
+the single `@hprabhash` npm scope — see [Current status](#current-status)
 below.
 
 ## Day to day: adding a changeset
@@ -62,30 +62,26 @@ Two GitHub Actions workflows:
 That's the entire manual step — versions, changelogs, and publishing are all
 automatic from there.
 
-## Current status: nothing published yet
+## Current status
 
-By deliberate decision, no `NPM_TOKEN` secret is configured on this repo —
-so the publish half of `release.yml` has nothing to authenticate with.
-Merging the Version Packages PR today would bump versions and update
-changelogs but **not** actually publish anything to npm (the publish step
-will just fail to authenticate). This is intentional, not a bug.
+`NPM_TOKEN` is configured, and all 8 packages publish under the `@hprabhash`
+npm scope — an npm Organization (not a personal scope; the account's real
+npm username is `prabhashkutti`, not `hprabhash`) that the publishing
+account is a member of.
 
-**To enable real publishing:**
+**Why everything is under one scope:** the packages were originally split
+across `@hprabhash/shell-cli` (matching the org) and `@shell-cli/*` (for the
+other 7). That second scope was never actually created as an npm org, so
+`changeset publish` published `@hprabhash/shell-cli` successfully and then
+hard-failed on the first `@shell-cli/*` package — leaving a published
+`@hprabhash/shell-cli` version with dependencies on six packages that don't
+exist on the registry (uninstallable). Rather than create and maintain a
+second org, every package was renamed onto the single, already-working
+`@hprabhash` scope, and `@hprabhash/shell-cli` got a patch release to fix
+its now-correct dependency names.
 
-1. Generate an npm
-   [automation token](https://docs.npmjs.com/creating-and-viewing-access-tokens)
-   under whichever npm account/org will own these packages.
-2. Add it as a repository secret named `NPM_TOKEN`
-   (Settings → Secrets and variables → Actions → New repository secret).
-3. Push anything to `main` (or just merge the next Version Packages PR) —
-   `release.yml`'s publish step will pick up the secret automatically via
-   `actions/setup-node`'s `registry-url` + `NODE_AUTH_TOKEN` mechanism (see
-   `release.yml`'s comments). No workflow changes needed.
-
-Note `@hprabhash/shell-cli` needs the `@hprabhash` npm scope to exist and be
-owned by whoever's token you use; the `@shell-cli/*` packages need the
-`@shell-cli` scope similarly (create it as an npm org if you don't already
-have packages published under it).
+**To add more packages later:** as long as they're scoped `@hprabhash/*`,
+no further npm-side setup is needed — the org and the token already work.
 
 ## Manual commands (rarely needed)
 

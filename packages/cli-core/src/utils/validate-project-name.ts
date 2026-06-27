@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-import { ValidationError } from "@shell-cli/shared";
+import { ValidationError } from "@hprabhash/shared";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const MAX_LENGTH = 214;

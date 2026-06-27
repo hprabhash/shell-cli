@@ -10,8 +10,8 @@ see [contributing.md](contributing.md).
 npm install -g @hprabhash/shell-cli
 ```
 
-(Not published yet — see [releasing.md](releasing.md). Until then, run it from
-a local clone: `pnpm --filter @hprabhash/shell-cli build && node packages/cli-core/dist/bin.js --help`.)
+(See [releasing.md](releasing.md) for current publish status. To run from a
+local clone instead: `pnpm --filter @hprabhash/shell-cli build && node packages/cli-core/dist/bin.js --help`.)
 
 ## Quick start
 

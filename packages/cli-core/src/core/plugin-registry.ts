@@ -1,8 +1,8 @@
-import betterAuthPlugin from "@shell-cli/plugin-better-auth";
-import drizzlePlugin from "@shell-cli/plugin-drizzle";
-import nextPlugin from "@shell-cli/plugin-next";
-import postgresPlugin from "@shell-cli/plugin-postgres";
-import prismaPlugin from "@shell-cli/plugin-prisma";
+import betterAuthPlugin from "@hprabhash/plugin-better-auth";
+import drizzlePlugin from "@hprabhash/plugin-drizzle";
+import nextPlugin from "@hprabhash/plugin-next";
+import postgresPlugin from "@hprabhash/plugin-postgres";
+import prismaPlugin from "@hprabhash/plugin-prisma";
 import {
   PluginError,
   pluginMetadataSchema,
@@ -10,7 +10,7 @@ import {
   type Plugin,
   type PluginCategory,
   type PluginMetadata,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 
 // Order mirrors the spec's own prompt sequence (Framework, ORM, Database, Auth) —
 // `getPluginsByCategory`'s "first" default under `--yes` follows this order.

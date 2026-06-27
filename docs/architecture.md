@@ -26,7 +26,7 @@ registry templates), and [releasing.md](releasing.md) (cutting a release).
 
 ### Packages
 
-- **`packages/shared`** (`@shell-cli/shared`) — framework-agnostic primitives shared by
+- **`packages/shared`** (`@hprabhash/shared`) — framework-agnostic primitives shared by
   every other package: the `ShellCliError` hierarchy, shared TypeScript types
   (`PackageManager`, `FrameworkId`, etc.), app-wide constants, and the zod schema for
   the persisted config file. Plugin packages (Phase 2+) will depend on this, not on
@@ -132,7 +132,7 @@ fixtures.
 
 ### Registry (`packages/cli-core/src/core/plugin-registry.ts`)
 
-A static `BUILT_IN_PLUGINS` array (currently just `@shell-cli/plugin-next`'s default
+A static `BUILT_IN_PLUGINS` array (currently just `@hprabhash/plugin-next`'s default
 export). `getAllPlugins()`, `getPluginsByCategory()`, `findPluginById()` all take an
 optional `plugins` array (defaulting to the built-in list) purely so tests can inject
 fixtures without any real module loading. `getPluginMetadata()` validates a plugin's
@@ -162,7 +162,7 @@ than a fixture-only test.
 
 ## Phase 3 — Template Engine
 
-### `packages/template-engine` (`@shell-cli/template-engine`)
+### `packages/template-engine` (`@hprabhash/template-engine`)
 
 A new package, separate from `cli-core`, for the same reason `shared` is separate:
 plugin packages (`plugin-next` now, `plugin-better-auth`/`plugin-prisma`/etc. later)
@@ -246,7 +246,7 @@ Tailwind/dark-mode work, naming the project and the stack.
 (new in `shared/src/plugin.ts` — the boundary check between a plugin's generic
 `Record<string, unknown>` variables bag and what it specifically needs, throwing
 `PluginError` on a miss) and calls `renderTemplateTree` from
-`@shell-cli/template-engine`. `install`/`postInstall` stay unimplemented:
+`@hprabhash/template-engine`. `install`/`postInstall` stay unimplemented:
 installing dependencies is generic across every framework, so `cli-core` handles
 it once rather than each plugin reimplementing the same `<pm> install` call.
 
@@ -367,7 +367,7 @@ ts-morph — sufficient for the job, smaller dependency footprint. "Teams" requi
 `organization.ts` itself reads whether `teams` is in the selected set to decide
 whether to pass `{teams: {enabled: true}}` into its own `organization()` call.
 
-### `@shell-cli/template-engine` extensions
+### `@hprabhash/template-engine` extensions
 
 Two small, well-motivated additions, both reusable by Phase 6:
 
@@ -454,7 +454,7 @@ Postgres, which can't be assumed to exist, so that step is left to the user
 with clear `printSuccessMessage` instructions rather than silently attempted
 and likely failing.
 
-### `@shell-cli/template-engine`: three more extensions
+### `@hprabhash/template-engine`: three more extensions
 
 - `mergeEnvFile`/`appendGitignoreEntries` — append-if-missing, the same idea
   as `mergePackageJsonFragment`, needed once more than one plugin writes into
@@ -824,8 +824,8 @@ repo Phase 7 just connected.
 ### A real bug found before any code ran: the package can't be installed as published
 
 `cli-core`'s `tsup.config.ts` has no `noExternal` — `dist/bin.js` imports
-`@shell-cli/plugin-better-auth` etc. as genuine external packages, not
-bundled. Every other `@shell-cli/*` package was `"private": true` and had
+`@hprabhash/plugin-better-auth` etc. as genuine external packages, not
+bundled. Every other `@hprabhash/*` package was `"private": true` and had
 never been published. Publishing `cli-core` exactly as it stood would have
 produced a broken install: npm would try to resolve six packages that
 don't exist on the registry.
@@ -838,7 +838,7 @@ dist location instead, breaking template lookup — the other four plugins
 have no such dependency (inline string templates), but fixing some of six
 packages and not others is its own inconsistency.
 
-**Fix:** make every `@shell-cli/*` package a real, independently-published
+**Fix:** make every `@hprabhash/*` package a real, independently-published
 package instead — removed `"private": true`, added
 `"publishConfig": {"access": "public"}`, and (`plugin-next` only) a
 `"files"` field including `templates` alongside `dist` so its template
@@ -846,7 +846,7 @@ tree actually ships. This is exactly the scenario Changesets exists for:
 multi-package monorepo releases where `workspace:*` needs rewriting to
 real version ranges at publish time — verified for real via `pnpm pack`
 on `cli-core` and inspecting the resulting tarball's `package.json`:
-every `@shell-cli/*` dependency had been rewritten from `workspace:*` to
+every `@hprabhash/*` dependency had been rewritten from `workspace:*` to
 the literal current version (`0.1.0`), confirming an install would
 actually resolve correctly. `pnpm -r publish --dry-run` across every
 package (no network write, just packing/validation) also confirmed
@@ -942,3 +942,52 @@ file. This needs the repository owner to flip that one setting — not
 something a workflow or `GITHUB_TOKEN` can grant itself. Once it's on,
 the next push to `main` (or re-running this same workflow) should open
 the Version Packages PR successfully with no other changes needed.
+
+### Turning on real publishing: an npm scope mismatch, twice
+
+Once the Version Packages PR flow worked and `NPM_TOKEN` was added, the
+publish step still failed. Diagnosing it without GitHub admin access to
+the run's raw logs (the Actions API rejects `actions/jobs/{id}/logs` with
+403 for a non-admin token even on a public repo; the public job-results
+page's "annotations" only surface a generic `Publish command exited with
+code 1`, never the underlying npm error) meant reasoning from the npm
+registry's own public, unauthenticated read API instead.
+
+The actual mismatch: `cli-core` was planned to publish as
+`@hprabhash/shell-cli`, on the assumption that `hprabhash` was the user's
+npm username (it matches their GitHub username — never independently
+verified). It isn't; their real npm username is `prabhashkutti`, and npm
+usernames can't be renamed. A scope only auto-resolves to an account when
+the scope name matches that account's username exactly — so `@hprabhash`
+needed to exist as a separate npm **Organization** (Account → Add an
+Organization), which the user then created.
+
+That fixed `cli-core`'s publish, but the other 7 packages were scoped
+`@shell-cli/*` — a second scope that was never created as an org. Result:
+`changeset publish` published `@hprabhash/shell-cli@0.2.0` successfully
+(confirmed live via `registry.npmjs.org/@hprabhash/shell-cli`, publisher
+`prabhashkutti`), then hard-failed publishing the first `@shell-cli/*`
+package, exiting 1 — and left a real, broken package on the registry:
+`@hprabhash/shell-cli@0.2.0`'s own `dependencies` pin six packages
+(`@shell-cli/shared`, `@shell-cli/plugin-better-auth`, etc.) that don't
+exist, confirmed via the registry API returning 404 for every one of them.
+Anyone running `npm install -g @hprabhash/shell-cli` at that version would
+hit an unresolvable dependency.
+
+Rather than create and maintain a second npm org for no real benefit, all
+8 packages were renamed onto the single, already-working `@hprabhash`
+scope (`@shell-cli/shared` → `@hprabhash/shared`, etc., across every
+`package.json`, source import, test, and doc) and `cli-core` got a patch
+changeset to publish a corrected `0.2.1` with the right dependency names,
+superseding the broken `0.2.0`. See [releasing.md](releasing.md#current-status)
+for the live status.
+
+A second, unrelated bug surfaced by the same push: an e2e test
+(`update degrades gracefully when no version of this package is published
+yet`) hard-assumed the package would _never_ be found on the registry —
+exactly backwards once publishing started working. Rewritten to assert
+only the durable invariant (`shell update` exits 0 and never reaches the
+interactive confirm prompt with no TTY behind it), since which specific
+non-interactive outcome that hits (`NetworkError`, "already on the latest
+version", or a declined update) legitimately depends on real registry
+state at test time.

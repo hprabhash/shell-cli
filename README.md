@@ -27,13 +27,13 @@ shell create my-app
 
 ```
 packages/
-  shared/              @shell-cli/shared              — errors, types, constants, schemas
-  template-engine/     @shell-cli/template-engine      — Handlebars rendering, rollback-safe file writes
-  plugin-next/         @shell-cli/plugin-next          — Next.js 16 (App Router) framework plugin
-  plugin-better-auth/  @shell-cli/plugin-better-auth   — Better Auth, 19 selectable features
-  plugin-prisma/       @shell-cli/plugin-prisma        — Prisma 7 (driver-adapter) ORM plugin
-  plugin-drizzle/      @shell-cli/plugin-drizzle       — Drizzle ORM plugin
-  plugin-postgres/     @shell-cli/plugin-postgres      — PostgreSQL via docker-compose
+  shared/              @hprabhash/shared              — errors, types, constants, schemas
+  template-engine/     @hprabhash/template-engine      — Handlebars rendering, rollback-safe file writes
+  plugin-next/         @hprabhash/plugin-next          — Next.js 16 (App Router) framework plugin
+  plugin-better-auth/  @hprabhash/plugin-better-auth   — Better Auth, 19 selectable features
+  plugin-prisma/       @hprabhash/plugin-prisma        — Prisma 7 (driver-adapter) ORM plugin
+  plugin-drizzle/      @hprabhash/plugin-drizzle       — Drizzle ORM plugin
+  plugin-postgres/     @hprabhash/plugin-postgres      — PostgreSQL via docker-compose
   cli-core/            @hprabhash/shell-cli            — the CLI itself (bin: `shell`)
 registry/                                              — remote template registry content
   templates.json                                       — manifest, served via raw.githubusercontent.com

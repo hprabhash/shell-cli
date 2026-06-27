@@ -50,22 +50,22 @@ importers:
       '@clack/prompts':
         specifier: ^1.6.0
         version: 1.6.0
-      '@shell-cli/plugin-better-auth':
+      '@hprabhash/plugin-better-auth':
         specifier: workspace:*
         version: link:../plugin-better-auth
-      '@shell-cli/plugin-drizzle':
+      '@hprabhash/plugin-drizzle':
         specifier: workspace:*
         version: link:../plugin-drizzle
-      '@shell-cli/plugin-next':
+      '@hprabhash/plugin-next':
         specifier: workspace:*
         version: link:../plugin-next
-      '@shell-cli/plugin-postgres':
+      '@hprabhash/plugin-postgres':
         specifier: workspace:*
         version: link:../plugin-postgres
-      '@shell-cli/plugin-prisma':
+      '@hprabhash/plugin-prisma':
         specifier: workspace:*
         version: link:../plugin-prisma
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
       commander:
@@ -87,10 +87,10 @@ importers:
 
   packages/plugin-better-auth:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
-      '@shell-cli/template-engine':
+      '@hprabhash/template-engine':
         specifier: workspace:*
         version: link:../template-engine
       execa:
@@ -99,10 +99,10 @@ importers:
 
   packages/plugin-drizzle:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
-      '@shell-cli/template-engine':
+      '@hprabhash/template-engine':
         specifier: workspace:*
         version: link:../template-engine
       execa:
@@ -111,19 +111,19 @@ importers:
 
   packages/plugin-next:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
-      '@shell-cli/template-engine':
+      '@hprabhash/template-engine':
         specifier: workspace:*
         version: link:../template-engine
 
   packages/plugin-postgres:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
-      '@shell-cli/template-engine':
+      '@hprabhash/template-engine':
         specifier: workspace:*
         version: link:../template-engine
       execa:
@@ -132,10 +132,10 @@ importers:
 
   packages/plugin-prisma:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
-      '@shell-cli/template-engine':
+      '@hprabhash/template-engine':
         specifier: workspace:*
         version: link:../template-engine
       execa:
@@ -150,7 +150,7 @@ importers:
 
   packages/template-engine:
     dependencies:
-      '@shell-cli/shared':
+      '@hprabhash/shared':
         specifier: workspace:*
         version: link:../shared
       handlebars:

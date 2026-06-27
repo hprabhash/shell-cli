@@ -1,4 +1,4 @@
-import type { CommandRunner, PackageManager } from "@shell-cli/shared";
+import type { CommandRunner, PackageManager } from "@hprabhash/shared";
 
 import { realCommandRunner } from "./command-runner";
 

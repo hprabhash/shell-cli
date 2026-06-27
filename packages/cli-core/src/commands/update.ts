@@ -1,4 +1,4 @@
-import { ConfigError, NetworkError } from "@shell-cli/shared";
+import { ConfigError, NetworkError } from "@hprabhash/shared";
 import type { Command } from "commander";
 
 import { logger } from "../core/logger";

@@ -2,7 +2,7 @@ import {
   SUPPORTED_PACKAGE_MANAGERS,
   type CommandRunner,
   type PackageManager,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 
 import { realCommandRunner } from "./command-runner";
 

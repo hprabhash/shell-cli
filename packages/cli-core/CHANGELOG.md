@@ -15,9 +15,9 @@
 ### Patch Changes
 
 - Updated dependencies [b5d05cd]
-  - @shell-cli/shared@0.2.0
-  - @shell-cli/plugin-next@0.1.1
-  - @shell-cli/plugin-better-auth@0.1.1
-  - @shell-cli/plugin-prisma@0.1.1
-  - @shell-cli/plugin-drizzle@0.1.1
-  - @shell-cli/plugin-postgres@0.1.1
+  - @hprabhash/shared@0.2.0
+  - @hprabhash/plugin-next@0.1.1
+  - @hprabhash/plugin-better-auth@0.1.1
+  - @hprabhash/plugin-prisma@0.1.1
+  - @hprabhash/plugin-drizzle@0.1.1
+  - @hprabhash/plugin-postgres@0.1.1

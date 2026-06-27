@@ -1,5 +1,5 @@
 {
-  "name": "@shell-cli/template-engine",
+  "name": "@hprabhash/template-engine",
   "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@shell-cli/shared": "workspace:*",
+    "@hprabhash/shared": "workspace:*",
     "handlebars": "^4.7.9"
   }
 }

@@ -7,8 +7,8 @@ import {
   type Plugin,
   type PluginGenerateContext,
   type PluginMetadata,
-} from "@shell-cli/shared";
-import { renderTemplateTree } from "@shell-cli/template-engine";
+} from "@hprabhash/shared";
+import { renderTemplateTree } from "@hprabhash/template-engine";
 
 const metadata: PluginMetadata = {
   id: "next",

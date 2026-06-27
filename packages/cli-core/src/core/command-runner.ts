@@ -1,6 +1,6 @@
 import { execa } from "execa";
 
-import type { CommandRunner } from "@shell-cli/shared";
+import type { CommandRunner } from "@hprabhash/shared";
 
 /** Real process-spawning implementation of `CommandRunner`. Tests inject a fake instead. */
 export const realCommandRunner: CommandRunner = async (command, args, options) => {

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { CheckResult, Plugin, PluginGenerateContext, PluginMetadata } from "@shell-cli/shared";
-import { ProjectWriter, mergeEnvFile, type EnvFileEntry } from "@shell-cli/template-engine";
+import type { CheckResult, Plugin, PluginGenerateContext, PluginMetadata } from "@hprabhash/shared";
+import { ProjectWriter, mergeEnvFile, type EnvFileEntry } from "@hprabhash/template-engine";
 import { execa } from "execa";
 
 const metadata: PluginMetadata = {

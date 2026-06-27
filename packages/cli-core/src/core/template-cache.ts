@@ -7,7 +7,7 @@ import {
   REGISTRY_MANIFEST_CACHE_FILE_NAME,
   TEMPLATES_CACHE_SUBDIR_NAME,
   type RegistryManifest,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 import semver from "semver";
 
 import { downloadTemplateVersionToDir } from "./registry-client";

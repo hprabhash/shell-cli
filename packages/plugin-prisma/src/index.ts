@@ -7,13 +7,13 @@ import type {
   PluginGenerateContext,
   PluginMetadata,
   PluginPostInstallContext,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 import {
   ProjectWriter,
   appendGitignoreEntries,
   mergeNextConfigServerExternalPackages,
   mergePackageJsonFragment,
-} from "@shell-cli/template-engine";
+} from "@hprabhash/template-engine";
 import { execa } from "execa";
 
 const metadata: PluginMetadata = {

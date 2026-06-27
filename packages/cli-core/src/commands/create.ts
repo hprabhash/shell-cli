@@ -8,7 +8,7 @@ import {
   type PackageManager,
   type Plugin,
   type ProjectPlan,
-} from "@shell-cli/shared";
+} from "@hprabhash/shared";
 import type { Command } from "commander";
 
 import { colors } from "../core/colors";
