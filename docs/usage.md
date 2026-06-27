@@ -6,8 +6,22 @@ see [contributing.md](contributing.md).
 
 ## Install
 
+No install needed — run it directly with `npx` (it resolves the `shell` bin
+even though it differs from the package name, since the package declares
+only one `bin` entry):
+
+```bash
+npx @hprabhash/shell-cli create my-app
+```
+
+Add `-y` to skip the "ok to proceed" confirmation in scripts/CI:
+`npx -y @hprabhash/shell-cli create my-app`.
+
+Or install it globally to get the shorter `shell` command:
+
 ```bash
 npm install -g @hprabhash/shell-cli
+shell create my-app
 ```
 
 (See [releasing.md](releasing.md) for current publish status. To run from a
